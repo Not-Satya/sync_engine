@@ -1,0 +1,27 @@
+# Binaries
+/syncd
+/server
+/bin/
+*.exe
+
+# Sync state and data
+.sync_engine/
+data/
+sync_folder/
+
+# Config with secrets
+config.yaml
+server.yaml
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+*.test
+coverage.out
