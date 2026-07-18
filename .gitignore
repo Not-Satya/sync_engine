@@ -25,3 +25,7 @@ Thumbs.db
 # Test artifacts
 *.test
 coverage.out
+
+# DB
+*.db
+*.db-*
