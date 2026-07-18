@@ -8,8 +8,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Not-Satya/sync_engine/internal/ids"
 	"golang.org/x/crypto/argon2"
+
+	"github.com/Not-Satya/sync_engine/internal/ids"
 )
 
 var (
@@ -32,7 +33,6 @@ func HashPassword(password string) (string, error) {
 		return "", fmt.Errorf("salt: %w", err)
 	}
 	hash := argon2.IDKey([]byte(password), salt, argonTime, argonMemory, argonThreads, argonKeyLen)
-
 	// Format: argon2id$v=19$m=65536,t=1,p=4$<salt>$<hash> (base64)
 	return fmt.Sprintf(
 		"argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
@@ -42,6 +42,7 @@ func HashPassword(password string) (string, error) {
 	), nil
 }
 
+// VerifyPassword checks a plaintext password against an encoded hash.
 func VerifyPassword(encoded, password string) error {
 	parts := strings.Split(encoded, "$")
 	if len(parts) != 5 || parts[0] != "argon2id" {
@@ -69,7 +70,7 @@ func VerifyPassword(encoded, password string) error {
 
 // IssueToken returns plaintext token and its hash for persistence.
 func IssueToken() (plaintext string, hash string, err error) {
-	plaintext, err = ids.Newtoken()
+	plaintext, err = ids.NewToken()
 	if err != nil {
 		return "", "", err
 	}

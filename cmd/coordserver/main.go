@@ -13,7 +13,7 @@ import (
 )
 
 func main() {
-	addr := flag.String("addr", ":8000", "HTTP listen address")
+	addr := flag.String("addr", ":8080", "HTTP listen address")
 	dbPath := flag.String("db", filepath.Join("data", "coord.db"), "coordination sqlite path")
 	flag.Parse()
 
@@ -34,7 +34,7 @@ func main() {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	log.Printf("coordination server listening on %s (db = %s)", *addr, *dbPath)
+	log.Printf("coordination server listening on %s (db=%s)", *addr, *dbPath)
 	log.Printf("schema: users, devices, auth_tokens, folders, subscriptions, presence - no file bytes")
 	if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("listen: %v", err)

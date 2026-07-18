@@ -10,8 +10,8 @@ import (
 	"strings"
 )
 
-// crockfordBase32 is URL-safeish and avoids ambiguous characters (0/o, 1/I/L).
-var crockfordBase32 = base32.NewEncoding("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ").WithPadding(base32.NoPadding)
+// crockfordBase32 is URL-safeish and avoids ambiguous characters (0/O, 1/I/L).
+var crockfordBase32 = base32.NewEncoding("0123456789ABCDEFGHJKMNPQRSTVWXYZ").WithPadding(base32.NoPadding)
 
 // NewUserID returns a random opaque user identifier.
 func NewUserID() (string, error) {
@@ -28,15 +28,15 @@ func NewToken() (string, error) {
 	return randomPrefixed("tok", 32)
 }
 
-// DeviceKeyMaterial holds the keypair used to derive a stable DeviceID
+// DeviceKeyMaterial holds the keypair used to derive a stable DeviceID.
 type DeviceKeyMaterial struct {
 	DeviceID   string
 	PublicKey  ed25519.PublicKey
 	PrivateKey ed25519.PrivateKey
 }
 
-// NewDeviceKeyMaterial generates an Ed25519 keypair and derrives DeviceID
-// as the first 32 characters of crockfordBase32(SHA-256(publicKey))
+// NewDeviceKeyMaterial generates an Ed25519 keypair and derives DeviceID
+// as the first 32 characters of crockford-base32(SHA-256(publicKey)).
 func NewDeviceKeyMaterial() (DeviceKeyMaterial, error) {
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -61,7 +61,7 @@ func DeviceIDFromPublicKey(pub ed25519.PublicKey) string {
 
 // HashToken returns a hex-encoded SHA-256 digest of a bearer token.
 func HashToken(plaintext string) string {
-	sum := sha256.Sum224([]byte(plaintext))
+	sum := sha256.Sum256([]byte(plaintext))
 	return hex.EncodeToString(sum[:])
 }
 

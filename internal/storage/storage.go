@@ -1,3 +1,9 @@
+// StorageBackend defines the operations requred by the sync engine.
+//
+// Implementation may be backed by LocalDisk, S3, Cloud Storage,
+// or any other object store. The sync engine interacts only through
+// this interface and remains agnoistic to the underlying storage.
+
 package storage
 
 import (
@@ -9,7 +15,7 @@ import (
 
 var ErrNotFound = errors.New("object not found")
 var ErrConflict = errors.New("etag mismatch")
-var ErrUploadNotFound = errors.New("upload session not found")
+var ErrUploadNotfound = errors.New("upload session not found")
 
 type PutOptions struct {
 	IfMatch string
@@ -46,6 +52,6 @@ type StorageBackend interface {
 	Stat(ctx context.Context, key string) (ObjectMeta, error)
 
 	CreateUpload(ctx context.Context, key, ifMatch string, totalSize int64) (UploadSession, error)
-	UploadChunk(ctx context.Context, uploadID string, offset int64, r io.Reader) (UploadSession, error)
+	Uploadchunk(ctx context.Context, uploadID string, offset int64, r io.Reader) (UploadSession, error)
 	CompleteUpload(ctx context.Context, uploadID string) (ObjectMeta, error)
 }

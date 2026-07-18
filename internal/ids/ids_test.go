@@ -13,7 +13,6 @@ func TestDeviceIDFromPublicKeyStable(t *testing.T) {
 	}
 	a := DeviceIDFromPublicKey(pub)
 	b := DeviceIDFromPublicKey(pub)
-
 	if a != b {
 		t.Fatalf("unstable id: %s vs %s", a, b)
 	}
