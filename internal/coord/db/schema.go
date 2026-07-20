@@ -19,7 +19,8 @@ CREATE TABLE IF NOT EXISTS devices (
     platform   TEXT NOT NULL DEFAULT '',
     public_key BLOB NOT NULL,
     created_at TEXT NOT NULL,
-    last_seen  TEXT NOT NULL
+    last_seen  TEXT NOT NULL,
+    revoked_at TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_devices_user ON devices(user_id);

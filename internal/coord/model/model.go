@@ -20,13 +20,19 @@ type User struct {
 
 // Device is a linked peer. DeviceID is derived from the device public key.
 type Device struct {
-	DeviceID  string    `json:"device_id"`
-	UserID    string    `json:"user_id"`
-	Name      string    `json:"name"`
-	Platform  string    `json:"platform"`
-	PublicKey []byte    `json:"public_key"` // raw Ed25519 public key
-	CreatedAt time.Time `json:"created_at"`
-	LastSeen  time.Time `json:"last_seen_at"`
+	DeviceID  string     `json:"device_id"`
+	UserID    string     `json:"user_id"`
+	Name      string     `json:"name"`
+	Platform  string     `json:"platform"`
+	PublicKey []byte     `json:"public_key"` // raw Ed25519 public key
+	CreatedAt time.Time  `json:"created_at"`
+	LastSeen  time.Time  `json:"last_seen_at"`
+	RevokedAt *time.Time `json:"revoked_at,omitempty"` // non-nil = soft-revoked (ADR 9)
+}
+
+// Revoked reports whether the device may no longer authenticate.
+func (d Device) Revoked() bool {
+	return d.RevokedAt != nil
 }
 
 // AuthToken is a per-device opaque credential. Only the hash is persisted.

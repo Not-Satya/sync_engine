@@ -43,6 +43,7 @@ func (s *Server) Handler() http.Handler {
 			r.Use(s.requireDevice)
 			r.Get("/me", s.handleMe)
 			r.Get("/devices", s.handleListDevices)
+			r.Delete("/devices/{deviceID}", s.handleRevokeDevice)
 
 			r.Post("/folders", s.handleCreateFolder)
 			r.Get("/folders", s.handleListFolders)

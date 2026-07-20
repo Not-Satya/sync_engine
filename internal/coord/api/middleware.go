@@ -34,6 +34,10 @@ func (s *Server) requireDevice(next http.Handler) http.Handler {
 			writeErr(w, http.StatusUnauthorized, "unknown device")
 			return
 		}
+		if dev.Revoked() {
+			writeErr(w, http.StatusUnauthorized, "device revoked")
+			return
+		}
 		ctx := context.WithValue(r.Context(), ctxToken, tok)
 		ctx = context.WithValue(ctx, ctxDevice, dev)
 		next.ServeHTTP(w, r.WithContext(ctx))

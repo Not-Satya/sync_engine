@@ -18,6 +18,7 @@ var (
 	ErrConflict     = errors.New("conflict")
 	ErrUnauthorized = errors.New("unauthorized")
 	ErrForbidden    = errors.New("forbidden")
+	ErrRevoked      = errors.New("device revoked")
 )
 
 // Store is the coordination persistence layer. It never stores file bytes.
@@ -34,6 +35,10 @@ func Open(path string) (*Store, error) {
 	if _, err := db.Exec(Schema); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("apply schema: %w", err)
+	}
+	if err := migrate(db); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("migrate schema: %w", err)
 	}
 	return &Store{db: db}, nil
 }
@@ -116,14 +121,14 @@ func (s *Store) CreateDevice(ctx context.Context, d model.Device, token model.Au
 
 func (s *Store) DeviceByID(ctx context.Context, deviceID string) (model.Device, error) {
 	row := s.db.QueryRowContext(ctx, `
-		SELECT device_id, user_id, name, platform, public_key, created_at, last_seen
+		SELECT device_id, user_id, name, platform, public_key, created_at, last_seen, revoked_at
 		FROM devices WHERE device_id = ?`, deviceID)
 	return scanDevice(row)
 }
 
 func (s *Store) ListDevices(ctx context.Context, userID string) ([]model.Device, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT device_id, user_id, name, platform, public_key, created_at, last_seen
+		SELECT device_id, user_id, name, platform, public_key, created_at, last_seen, revoked_at
 		FROM devices WHERE user_id = ? ORDER BY created_at`, userID)
 	if err != nil {
 		return nil, err
@@ -139,6 +144,56 @@ func (s *Store) ListDevices(ctx context.Context, userID string) ([]model.Device,
 		out = append(out, d)
 	}
 	return out, rows.Err()
+}
+
+// RevokeDevice soft-revokes a device: sets revoked_at, deletes tokens, forces offline.
+// Caller must already have verified the acting device owns the same account.
+func (s *Store) RevokeDevice(ctx context.Context, deviceID string, at time.Time) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var revoked sql.NullString
+	err = tx.QueryRowContext(ctx,
+		`SELECT revoked_at FROM devices WHERE device_id = ?`, deviceID,
+	).Scan(&revoked)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		return err
+	}
+	if revoked.Valid && revoked.String != "" {
+		return ErrRevoked // already revoked — idempotent enough to treat as done? use ErrRevoked for 409
+	}
+
+	res, err := tx.ExecContext(ctx,
+		`UPDATE devices SET revoked_at = ? WHERE device_id = ? AND (revoked_at IS NULL OR revoked_at = '')`,
+		at.UTC().Format(time.RFC3339Nano), deviceID,
+	)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrRevoked
+	}
+
+	if _, err := tx.ExecContext(ctx,
+		`DELETE FROM auth_tokens WHERE device_id = ?`, deviceID); err != nil {
+		return err
+	}
+
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE presence SET status = 'offline', endpoint = '', updated_at = ?
+		WHERE device_id = ?`,
+		at.UTC().Format(time.RFC3339Nano), deviceID,
+	); err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }
 
 func (s *Store) AuthByTokenHash(ctx context.Context, tokenHash string) (model.AuthToken, error) {
@@ -356,7 +411,8 @@ func scanUser(row scannable) (model.User, error) {
 func scanDevice(row scannable) (model.Device, error) {
 	var d model.Device
 	var created, lastSeen string
-	if err := row.Scan(&d.DeviceID, &d.UserID, &d.Name, &d.Platform, &d.PublicKey, &created, &lastSeen); err != nil {
+	var revoked sql.NullString
+	if err := row.Scan(&d.DeviceID, &d.UserID, &d.Name, &d.Platform, &d.PublicKey, &created, &lastSeen, &revoked); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return model.Device{}, ErrNotFound
 		}
@@ -368,7 +424,17 @@ func scanDevice(row scannable) (model.Device, error) {
 		return model.Device{}, err
 	}
 	d.LastSeen, err = time.Parse(time.RFC3339Nano, lastSeen)
-	return d, err
+	if err != nil {
+		return model.Device{}, err
+	}
+	if revoked.Valid && revoked.String != "" {
+		t, err := time.Parse(time.RFC3339Nano, revoked.String)
+		if err != nil {
+			return model.Device{}, err
+		}
+		d.RevokedAt = &t
+	}
+	return d, nil
 }
 
 func scanPresence(row scannable) (model.Presence, error) {

@@ -48,13 +48,14 @@ type authResponse struct {
 }
 
 type deviceView struct {
-	DeviceID  string    `json:"device_id"`
-	UserID    string    `json:"user_id"`
-	Name      string    `json:"name"`
-	Platform  string    `json:"platform"`
-	PublicKey string    `json:"public_key_hex"`
-	CreatedAt time.Time `json:"created_at"`
-	LastSeen  time.Time `json:"last_seen_at"`
+	DeviceID  string     `json:"device_id"`
+	UserID    string     `json:"user_id"`
+	Name      string     `json:"name"`
+	Platform  string     `json:"platform"`
+	PublicKey string     `json:"public_key_hex"`
+	CreatedAt time.Time  `json:"created_at"`
+	LastSeen  time.Time  `json:"last_seen_at"`
+	RevokedAt *time.Time `json:"revoked_at,omitempty"`
 }
 
 func (s *Server) handleRegisterAccount(w http.ResponseWriter, r *http.Request) {
@@ -198,6 +199,53 @@ func (s *Server) handleListDevices(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"devices": views})
 }
 
+func (s *Server) handleRevokeDevice(w http.ResponseWriter, r *http.Request) {
+	caller := deviceFrom(r.Context())
+	targetID := chi.URLParam(r, "deviceID")
+	if targetID == "" {
+		writeErr(w, http.StatusBadRequest, "device id requred")
+		return
+	}
+
+	target, err := s.store.DeviceByID(r.Context(), targetID)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			writeErr(w, http.StatusNotFound, "device not found")
+			return
+		}
+		writeErr(w, http.StatusInternalServerError, "device lookup failed")
+		return
+	}
+	if target.UserID != caller.UserID {
+		writeErr(w, http.StatusForbidden, "device not on this account")
+		return
+	}
+
+	now := time.Now().UTC()
+	if err := s.store.RevokeDevice(r.Context(), targetID, now); err != nil {
+		if errors.Is(err, db.ErrRevoked) {
+			writeErr(w, http.StatusConflict, "device already revoked")
+			return
+		}
+		if errors.Is(err, db.ErrNotFound) {
+			writeErr(w, http.StatusNotFound, "device not found")
+			return
+		}
+		writeErr(w, http.StatusInternalServerError, "revoke failed")
+		return
+	}
+
+	updated, err := s.store.DeviceByID(r.Context(), targetID)
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"device_id":  targetID,
+			"revoked_id": now,
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, toDeviceView(updated))
+}
+
 func (s *Server) handleCreateFolder(w http.ResponseWriter, r *http.Request) {
 	dev := deviceFrom(r.Context())
 	var req createFolderRequest
@@ -334,5 +382,6 @@ func toDeviceView(d model.Device) deviceView {
 		PublicKey: hex.EncodeToString(d.PublicKey),
 		CreatedAt: d.CreatedAt,
 		LastSeen:  d.LastSeen,
+		RevokedAt: d.RevokedAt,
 	}
 }
