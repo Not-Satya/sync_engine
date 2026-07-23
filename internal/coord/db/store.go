@@ -196,6 +196,52 @@ func (s *Store) RevokeDevice(ctx context.Context, deviceID string, at time.Time)
 	return tx.Commit()
 }
 
+// RotateDeviceToken replaces all tokens for a device with a single new token hash.
+// The device must exist and must not be revoked.
+func (s *Store) RotateDeviceToken(ctx context.Context, deviceID, userID, newTokenHash string, at time.Time) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var revoked sql.NullString
+	var owner string
+	err = tx.QueryRowContext(ctx,
+		`SELECT user_id, revoked_at FROM devices WHERE device_id = ?`, deviceID,
+	).Scan(&owner, &revoked)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		return err
+	}
+	if owner != userID {
+		return ErrForbidden
+	}
+	if revoked.Valid && revoked.String != "" {
+		return ErrRevoked
+	}
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM auth_tokens WHERE device_id = ?`, deviceID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO auth_tokens (token_hash, device_id, user_id, created_at, expires_at)
+		VALUES (?, ?, ?, ?, NULL)`,
+		newTokenHash, deviceID, userID, at.UTC().Format(time.RFC3339Nano),
+	); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE devices SET last_seen = ? WHERE device_id = ?`,
+		at.UTC().Format(time.RFC3339Nano), deviceID,
+	); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 func (s *Store) AuthByTokenHash(ctx context.Context, tokenHash string) (model.AuthToken, error) {
 	row := s.db.QueryRowContext(ctx, `
 		SELECT token_hash, device_id, user_id, created_at, expires_at

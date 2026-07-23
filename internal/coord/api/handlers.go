@@ -48,14 +48,16 @@ type authResponse struct {
 }
 
 type deviceView struct {
-	DeviceID  string     `json:"device_id"`
-	UserID    string     `json:"user_id"`
-	Name      string     `json:"name"`
-	Platform  string     `json:"platform"`
-	PublicKey string     `json:"public_key_hex"`
-	CreatedAt time.Time  `json:"created_at"`
-	LastSeen  time.Time  `json:"last_seen_at"`
-	RevokedAt *time.Time `json:"revoked_at,omitempty"`
+	DeviceID     string     `json:"device_id"`
+	UserID       string     `json:"user_id"`
+	Name         string     `json:"name"`
+	Platform     string     `json:"platform"`
+	PublicKey    string     `json:"public_key_hex"`
+	CreatedAt    time.Time  `json:"created_at"`
+	LastSeenAt   time.Time  `json:"last_seen_at"`
+	RevokedAt    *time.Time `json:"revoked_at,omitempty"`
+	Revoked      bool       `json:"revoked"`
+	IsThisDevice bool       `json:"is_this_device"`
 }
 
 func (s *Server) handleRegisterAccount(w http.ResponseWriter, r *http.Request) {
@@ -165,7 +167,7 @@ func (s *Server) linkDevice(r *http.Request, user model.User, devReq deviceLinkR
 	}
 	return authResponse{
 		UserID:     user.UserID,
-		Device:     toDeviceView(dev),
+		Device:     toDeviceView(dev, dev.DeviceID),
 		Token:      plaintext,
 		PrivateKey: hex.EncodeToString(keys.PrivateKey),
 	}, 0, ""
@@ -181,29 +183,39 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"user_id": user.UserID,
 		"email":   user.Email,
-		"device":  toDeviceView(dev),
+		"device":  toDeviceView(dev, dev.DeviceID),
 	})
 }
 
 func (s *Server) handleListDevices(w http.ResponseWriter, r *http.Request) {
-	dev := deviceFrom(r.Context())
-	list, err := s.store.ListDevices(r.Context(), dev.UserID)
+	caller := deviceFrom(r.Context())
+	list, err := s.store.ListDevices(r.Context(), caller.UserID)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "list devices failed")
 		return
 	}
 	views := make([]deviceView, 0, len(list))
+	active := 0
 	for _, d := range list {
-		views = append(views, toDeviceView(d))
+		v := toDeviceView(d, caller.DeviceID)
+		views = append(views, v)
+		if !v.Revoked {
+			active++
+		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"devices": views})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"devices":        views,
+		"active_count":   active,
+		"total_count":    len(views),
+		"this_device_id": caller.DeviceID,
+	})
 }
 
 func (s *Server) handleRevokeDevice(w http.ResponseWriter, r *http.Request) {
 	caller := deviceFrom(r.Context())
 	targetID := chi.URLParam(r, "deviceID")
 	if targetID == "" {
-		writeErr(w, http.StatusBadRequest, "device id requred")
+		writeErr(w, http.StatusBadRequest, "device id required")
 		return
 	}
 
@@ -239,11 +251,34 @@ func (s *Server) handleRevokeDevice(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"device_id":  targetID,
-			"revoked_id": now,
+			"revoked_at": now,
 		})
 		return
 	}
-	writeJSON(w, http.StatusOK, toDeviceView(updated))
+	writeJSON(w, http.StatusOK, toDeviceView(updated, caller.DeviceID))
+}
+
+func (s *Server) handleRotateToken(w http.ResponseWriter, r *http.Request) {
+	caller := deviceFrom(r.Context())
+	plaintext, tokenHash, err := auth.IssueToken()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "token issue failed")
+		return
+	}
+	now := time.Now().UTC()
+	if err := s.store.RotateDeviceToken(r.Context(), caller.DeviceID, caller.UserID, tokenHash, now); err != nil {
+		if errors.Is(err, db.ErrRevoked) {
+			writeErr(w, http.StatusUnauthorized, "device revoked")
+			return
+		}
+		writeErr(w, http.StatusInternalServerError, "token rotate failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"device_id":  caller.DeviceID,
+		"token":      plaintext, // plaintext shown once; old token is invalid
+		"rotated_at": now,
+	})
 }
 
 func (s *Server) handleCreateFolder(w http.ResponseWriter, r *http.Request) {
@@ -373,15 +408,17 @@ func (s *Server) handleListPresence(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func toDeviceView(d model.Device) deviceView {
+func toDeviceView(d model.Device, callerDeviceID string) deviceView {
 	return deviceView{
-		DeviceID:  d.DeviceID,
-		UserID:    d.UserID,
-		Name:      d.Name,
-		Platform:  d.Platform,
-		PublicKey: hex.EncodeToString(d.PublicKey),
-		CreatedAt: d.CreatedAt,
-		LastSeen:  d.LastSeen,
-		RevokedAt: d.RevokedAt,
+		DeviceID:     d.DeviceID,
+		UserID:       d.UserID,
+		Name:         d.Name,
+		Platform:     d.Platform,
+		PublicKey:    hex.EncodeToString(d.PublicKey),
+		CreatedAt:    d.CreatedAt,
+		LastSeenAt:   d.LastSeen,
+		RevokedAt:    d.RevokedAt,
+		Revoked:      d.Revoked(),
+		IsThisDevice: d.DeviceID == callerDeviceID,
 	}
 }

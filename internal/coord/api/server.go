@@ -44,6 +44,7 @@ func (s *Server) Handler() http.Handler {
 			r.Get("/me", s.handleMe)
 			r.Get("/devices", s.handleListDevices)
 			r.Delete("/devices/{deviceID}", s.handleRevokeDevice)
+			r.Post("/auth/token/rotate", s.handleRotateToken)
 
 			r.Post("/folders", s.handleCreateFolder)
 			r.Get("/folders", s.handleListFolders)
