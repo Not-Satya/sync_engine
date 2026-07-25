@@ -35,7 +35,7 @@ func main() {
 	}
 
 	log.Printf("coordination server listening on %s (db=%s)", *addr, *dbPath)
-	log.Printf("schema: users, devices, auth_tokens, folders, subscriptions, presence - no file bytes")
+	log.Printf("schema: users, devices, auth_tokens, folders, subscriptions, presence — no file bytes")
 	if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("listen: %v", err)
 	}

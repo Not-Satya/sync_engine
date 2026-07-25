@@ -55,9 +55,9 @@ type Folder struct {
 // Subscription means a device will receive metadata updates for a folder.
 // It does not require the device to hold every file's bytes (selective sync later).
 type Subscription struct {
-	FolderID     string    `json:"folder_id"`
-	DeviceID     string    `json:"device_id"`
-	SubscribedAt time.Time `json:"subscribed_at"`
+	FolderID      string    `json:"folder_id"`
+	DeviceID      string    `json:"device_id"`
+	SubscribedAt  time.Time `json:"subscribed_at"`
 }
 
 // Presence is coordinator-visible reachability for peer introduction.
@@ -67,4 +67,16 @@ type Presence struct {
 	Status    PresenceStatus `json:"status"`
 	Endpoint  string         `json:"endpoint,omitempty"`
 	UpdatedAt time.Time      `json:"updated_at"`
+}
+
+// PairingCode lets an already-linked device authorize a new device without a password.
+// Only the hash is persisted (ADR 10).
+type PairingCode struct {
+	CodeHash      string     `json:"-"`
+	UserID        string     `json:"user_id"`
+	CreatedBy     string     `json:"created_by_device_id"`
+	CreatedAt     time.Time  `json:"created_at"`
+	ExpiresAt     time.Time  `json:"expires_at"`
+	UsedAt        *time.Time `json:"used_at,omitempty"`
+	UsedByDevice  string     `json:"used_by_device_id,omitempty"`
 }

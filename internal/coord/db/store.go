@@ -19,6 +19,7 @@ var (
 	ErrUnauthorized = errors.New("unauthorized")
 	ErrForbidden    = errors.New("forbidden")
 	ErrRevoked      = errors.New("device revoked")
+	ErrExpired      = errors.New("expired")
 )
 
 // Store is the coordination persistence layer. It never stores file bytes.

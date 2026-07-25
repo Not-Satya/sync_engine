@@ -21,4 +21,3 @@ Reason
 These are Layer 3 choices. Locking them before a folder subscription model and
 metadata sync loop exists produces speculative code. Phase 1 only needs
 identity, auth, folders, subscriptions, and presence.
-

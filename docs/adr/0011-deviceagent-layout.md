@@ -34,4 +34,3 @@ not a desktop UI. A separate `deviceagent` binary keeps the "server coordinates,
 device owns secrets" boundary obvious. Folding client commands into
 `coordserver` would blur that. Jumping to Wails or full `core/engine` now
 front-loads Layer 3 and UI before auth hardening is done.
- 

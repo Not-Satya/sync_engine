@@ -10,9 +10,9 @@ import (
 	"github.com/Not-Satya/sync_engine/internal/ids"
 )
 
-func TestRotateDeviceTokenReplacesOld(t *testing.T) {
+func TestRevokeDeviceWipesTokenAndBlocksReuse(t *testing.T) {
 	dir := t.TempDir()
-	store, err := Open(filepath.Join(dir, "rotate.db"))
+	store, err := Open(filepath.Join(dir, "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -26,7 +26,7 @@ func TestRotateDeviceTokenReplacesOld(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := store.CreateUser(ctx, model.User{
-		UserID: userID, Email: "rotate@example.com", PasswordHash: "x", CreatedAt: now,
+		UserID: userID, Email: "a@example.com", PasswordHash: "x", CreatedAt: now,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -35,27 +35,49 @@ func TestRotateDeviceTokenReplacesOld(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	oldHash := ids.HashToken("tok_old")
+	tokenHash := ids.HashToken("tok_test_plaintext")
+
 	dev := model.Device{
 		DeviceID: keys.DeviceID, UserID: userID, Name: "Laptop",
 		Platform: "windows", PublicKey: append([]byte(nil), keys.PublicKey...),
 		CreatedAt: now, LastSeen: now,
 	}
-	if err := store.CreateDevice(ctx, dev, model.AuthToken{
-		TokenHash: oldHash, DeviceID: dev.DeviceID, UserID: userID, CreatedAt: now,
-	}); err != nil {
+	tok := model.AuthToken{
+		TokenHash: tokenHash, DeviceID: dev.DeviceID, UserID: userID, CreatedAt: now,
+	}
+	if err := store.CreateDevice(ctx, dev, tok); err != nil {
 		t.Fatal(err)
 	}
 
-	newHash := ids.HashToken("tok_new")
-	if err := store.RotateDeviceToken(ctx, dev.DeviceID, userID, newHash, now); err != nil {
+	if _, err := store.AuthByTokenHash(ctx, tokenHash); err != nil {
+		t.Fatalf("token should work before revoke: %v", err)
+	}
+
+	if err := store.RevokeDevice(ctx, dev.DeviceID, now); err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := store.AuthByTokenHash(ctx, oldHash); err == nil {
-		t.Fatal("old token should be invalid")
+	got, err := store.DeviceByID(ctx, dev.DeviceID)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, err := store.AuthByTokenHash(ctx, newHash); err != nil {
-		t.Fatalf("new token should work: %v", err)
+	if !got.Revoked() {
+		t.Fatal("expected revoked")
+	}
+
+	if _, err := store.AuthByTokenHash(ctx, tokenHash); err == nil {
+		t.Fatal("token should be gone after revoke")
+	}
+
+	pres, err := store.PresenceByDevice(ctx, dev.DeviceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pres.Status != model.PresenceOffline {
+		t.Fatalf("expected offline, got %s", pres.Status)
+	}
+
+	if err := store.RevokeDevice(ctx, dev.DeviceID, now); err != ErrRevoked {
+		t.Fatalf("second revoke: want ErrRevoked, got %v", err)
 	}
 }

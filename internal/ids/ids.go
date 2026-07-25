@@ -59,7 +59,28 @@ func DeviceIDFromPublicKey(pub ed25519.PublicKey) string {
 	return "dev_" + strings.ToLower(encoded)
 }
 
-// HashToken returns a hex-encoded SHA-256 digest of a bearer token.
+// NewPairingCode returns an 8-character Crockford base32 pairing code (plaintext).
+func NewPairingCode() (string, error) {
+	buf := make([]byte, 5) // 40 bits → 8 base32 chars
+	if _, err := rand.Read(buf); err != nil {
+		return "", fmt.Errorf("pairing code: %w", err)
+	}
+	encoded := crockfordBase32.EncodeToString(buf)
+	if len(encoded) > 8 {
+		encoded = encoded[:8]
+	}
+	return strings.ToUpper(encoded), nil
+}
+
+// NormalizePairingCode uppercases and strips spaces/dashes before hashing.
+func NormalizePairingCode(code string) string {
+	code = strings.ToUpper(strings.TrimSpace(code))
+	code = strings.ReplaceAll(code, " ", "")
+	code = strings.ReplaceAll(code, "-", "")
+	return code
+}
+
+// HashToken returns a hex-encoded SHA-256 digest of a bearer token or pairing code.
 func HashToken(plaintext string) string {
 	sum := sha256.Sum256([]byte(plaintext))
 	return hex.EncodeToString(sum[:])

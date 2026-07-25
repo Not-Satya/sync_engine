@@ -33,3 +33,16 @@ func TestNewDeviceKeyMaterial(t *testing.T) {
 		t.Fatalf("mismatch: material=%s derived=%s", m.DeviceID, got)
 	}
 }
+
+func TestNewPairingCodeLength(t *testing.T) {
+	code, err := NewPairingCode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(code) != 8 {
+		t.Fatalf("len=%d code=%q", len(code), code)
+	}
+	if NormalizePairingCode("ab cd-ef") != "ABCDEF" {
+		t.Fatalf("normalize failed: %q", NormalizePairingCode("ab cd-ef"))
+	}
+}

@@ -16,8 +16,8 @@ import (
 )
 
 type registerAccountRequest struct {
-	Email    string            `json:"email"`
-	Password string            `json:"password"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
 	Device   deviceLinkRequest `json:"device"`
 }
 
@@ -40,11 +40,19 @@ type createFolderRequest struct {
 	Name string `json:"name"`
 }
 
+type redeemPairingRequest struct {
+	Code   string            `json:"code"`
+	Device deviceLinkRequest `json:"device"`
+}
+
+// PairingCodeTTL is how long a pairing code remains redeemable.
+const PairingCodeTTL = 10 * time.Minute
+
 type authResponse struct {
-	UserID     string     `json:"user_id"`
-	Device     deviceView `json:"device"`
-	Token      string     `json:"token"` // plaintext, shown once
-	PrivateKey string     `json:"device_private_key_hex"`
+	UserID     string       `json:"user_id"`
+	Device     deviceView   `json:"device"`
+	Token      string       `json:"token"` // plaintext, shown once
+	PrivateKey string       `json:"device_private_key_hex"`
 }
 
 type deviceView struct {
@@ -166,9 +174,9 @@ func (s *Server) linkDevice(r *http.Request, user model.User, devReq deviceLinkR
 		return authResponse{}, http.StatusInternalServerError, "create device failed"
 	}
 	return authResponse{
-		UserID:     user.UserID,
-		Device:     toDeviceView(dev, dev.DeviceID),
-		Token:      plaintext,
+		UserID: user.UserID,
+		Device: toDeviceView(dev, dev.DeviceID),
+		Token:  plaintext,
 		PrivateKey: hex.EncodeToString(keys.PrivateKey),
 	}, 0, ""
 }
@@ -204,9 +212,9 @@ func (s *Server) handleListDevices(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"devices":        views,
-		"active_count":   active,
-		"total_count":    len(views),
+		"devices":       views,
+		"active_count":  active,
+		"total_count":   len(views),
 		"this_device_id": caller.DeviceID,
 	})
 }
@@ -278,6 +286,112 @@ func (s *Server) handleRotateToken(w http.ResponseWriter, r *http.Request) {
 		"device_id":  caller.DeviceID,
 		"token":      plaintext, // plaintext shown once; old token is invalid
 		"rotated_at": now,
+	})
+}
+
+func (s *Server) handleCreatePairingCode(w http.ResponseWriter, r *http.Request) {
+	caller := deviceFrom(r.Context())
+	plain, err := ids.NewPairingCode()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "pairing code generation failed")
+		return
+	}
+	now := time.Now().UTC()
+	pc := model.PairingCode{
+		CodeHash:  ids.HashToken(ids.NormalizePairingCode(plain)),
+		UserID:    caller.UserID,
+		CreatedBy: caller.DeviceID,
+		CreatedAt: now,
+		ExpiresAt: now.Add(PairingCodeTTL),
+	}
+	if err := s.store.CreatePairingCode(r.Context(), pc); err != nil {
+		writeErr(w, http.StatusInternalServerError, "create pairing code failed")
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"code":                  plain, // shown once
+		"expires_at":            pc.ExpiresAt,
+		"ttl_seconds":           int(PairingCodeTTL.Seconds()),
+		"created_by_device_id":  caller.DeviceID,
+	})
+}
+
+func (s *Server) handleCancelPairingCode(w http.ResponseWriter, r *http.Request) {
+	caller := deviceFrom(r.Context())
+	code := ids.NormalizePairingCode(chi.URLParam(r, "code"))
+	if code == "" {
+		writeErr(w, http.StatusBadRequest, "code required")
+		return
+	}
+	hash := ids.HashToken(code)
+	if err := s.store.CancelPairingCode(r.Context(), hash, caller.UserID, caller.DeviceID); err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			writeErr(w, http.StatusNotFound, "pairing code not found")
+			return
+		}
+		writeErr(w, http.StatusInternalServerError, "cancel pairing code failed")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleRedeemPairingCode(w http.ResponseWriter, r *http.Request) {
+	var req redeemPairingRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	code := ids.NormalizePairingCode(req.Code)
+	if code == "" || strings.TrimSpace(req.Device.Name) == "" {
+		writeErr(w, http.StatusBadRequest, "code and device.name required")
+		return
+	}
+
+	keys, err := ids.NewDeviceKeyMaterial()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "device key generation failed")
+		return
+	}
+	plaintext, tokenHash, err := auth.IssueToken()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "token issue failed")
+		return
+	}
+	now := time.Now().UTC()
+	dev := model.Device{
+		DeviceID:  keys.DeviceID,
+		Name:      strings.TrimSpace(req.Device.Name),
+		Platform:  strings.TrimSpace(req.Device.Platform),
+		PublicKey: append([]byte(nil), keys.PublicKey...),
+		CreatedAt: now,
+		LastSeen:  now,
+	}
+	tok := model.AuthToken{
+		TokenHash: tokenHash,
+		DeviceID:  dev.DeviceID,
+		CreatedAt: now,
+	}
+
+	userID, err := s.store.RedeemPairingCode(r.Context(), ids.HashToken(code), dev, tok, now)
+	if err != nil {
+		switch {
+		case errors.Is(err, db.ErrNotFound):
+			writeErr(w, http.StatusUnauthorized, "invalid pairing code")
+		case errors.Is(err, db.ErrExpired):
+			writeErr(w, http.StatusUnauthorized, "pairing code expired")
+		case errors.Is(err, db.ErrConflict):
+			writeErr(w, http.StatusConflict, "pairing code already used")
+		default:
+			writeErr(w, http.StatusInternalServerError, "redeem pairing code failed")
+		}
+		return
+	}
+	dev.UserID = userID
+	writeJSON(w, http.StatusCreated, authResponse{
+		UserID:     userID,
+		Device:     toDeviceView(dev, dev.DeviceID),
+		Token:      plaintext,
+		PrivateKey: hex.EncodeToString(keys.PrivateKey),
 	})
 }
 
@@ -403,8 +517,8 @@ func (s *Server) handleListPresence(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"presence":    list,
-		"ttl_seconds": int(s.presenceTTL.Seconds()),
+		"presence":     list,
+		"ttl_seconds":  int(s.presenceTTL.Seconds()),
 	})
 }
 

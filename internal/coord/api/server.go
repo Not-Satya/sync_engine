@@ -38,6 +38,7 @@ func (s *Server) Handler() http.Handler {
 	r.Route("/v1", func(r chi.Router) {
 		r.Post("/accounts", s.handleRegisterAccount)
 		r.Post("/accounts/login", s.handleLogin) // links a new device to an existing account
+		r.Post("/pairing-codes/redeem", s.handleRedeemPairingCode)
 
 		r.Group(func(r chi.Router) {
 			r.Use(s.requireDevice)
@@ -45,6 +46,9 @@ func (s *Server) Handler() http.Handler {
 			r.Get("/devices", s.handleListDevices)
 			r.Delete("/devices/{deviceID}", s.handleRevokeDevice)
 			r.Post("/auth/token/rotate", s.handleRotateToken)
+
+			r.Post("/pairing-codes", s.handleCreatePairingCode)
+			r.Delete("/pairing-codes/{code}", s.handleCancelPairingCode)
 
 			r.Post("/folders", s.handleCreateFolder)
 			r.Get("/folders", s.handleListFolders)

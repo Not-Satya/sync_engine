@@ -59,4 +59,16 @@ CREATE TABLE IF NOT EXISTS presence (
     endpoint   TEXT NOT NULL DEFAULT '',
     updated_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS pairing_codes (
+    code_hash           TEXT PRIMARY KEY,
+    user_id             TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    created_by_device_id TEXT NOT NULL REFERENCES devices(device_id) ON DELETE CASCADE,
+    created_at          TEXT NOT NULL,
+    expires_at          TEXT NOT NULL,
+    used_at             TEXT,
+    used_by_device_id   TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_pairing_codes_user ON pairing_codes(user_id);
 `
