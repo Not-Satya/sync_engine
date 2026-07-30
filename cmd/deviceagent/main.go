@@ -25,6 +25,14 @@ func main() {
 	}
 
 	switch os.Args[1] {
+	case "register":
+		os.Exit(cmdRegister(os.Args[2:]))
+	case "login":
+		os.Exit(cmdLogin(os.Args[2:]))
+	case "pair-code":
+		os.Exit(cmdPairCode(os.Args[2:]))
+	case "pair":
+		os.Exit(cmdPair(os.Args[2:]))
 	case "status":
 		os.Exit(cmdStatus(os.Args[2:]))
 	case "run":
@@ -39,18 +47,150 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintf(os.Stderr, `deviceagent — local device stub for the sync coordinator
+	fmt.Fprintf(os.Stderr, `deviceagent — local device agent for the sync coordinator
 
 Usage:
-  deviceagent status [-keystore path] [-passphrase s]
-  deviceagent run    [-keystore path] [-passphrase s] [-interval 20s] [-endpoint addr]
+  deviceagent register -email e -password p -name Laptop [-coord URL] [-keystore path] [-passphrase s]
+  deviceagent login    -email e -password p -name Phone  [-coord URL] [-keystore path] [-passphrase s]
+  deviceagent pair-code [-keystore path] [-passphrase s]
+  deviceagent pair     -code CODE -name Tablet [-coord URL] [-keystore path] [-passphrase s]
+  deviceagent status   [-keystore path] [-passphrase s]
+  deviceagent run      [-keystore path] [-passphrase s] [-interval 20s] [-endpoint addr]
 
 Commands:
-  status   Load keystore, GET /v1/me, print identity
-  run      Load keystore and heartbeat until interrupted (Ctrl+C)
-
-Register / login / pair land in a later slice (P2.7).
+  register   Create account + first device; save encrypted keystore
+  login      Link another device with account password; save keystore
+  pair-code  (linked device) print a short-lived pairing code
+  pair       Link this device with a pairing code; save keystore
+  status     Load keystore, GET /v1/me
+  run        Heartbeat loop until Ctrl+C
 `)
+}
+
+func cmdRegister(args []string) int {
+	fs := flag.NewFlagSet("register", flag.ExitOnError)
+	coord := fs.String("coord", "http://localhost:8080", "coordinator base URL")
+	email := fs.String("email", "", "account email")
+	password := fs.String("password", "", "account password (>=8)")
+	name := fs.String("name", "", "device display name")
+	platform := fs.String("platform", "", "device platform (default: GOOS)")
+	ksPath := fs.String("keystore", "", "keystore path")
+	pass := fs.String("passphrase", "", "optional keystore passphrase wrap")
+	_ = fs.Parse(args)
+
+	if *email == "" || *password == "" || *name == "" {
+		log.Printf("-email, -password, and -name are required")
+		return 2
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	c := client.New(*coord, "")
+	link, err := c.Register(ctx, *email, *password, client.DeviceInfo{Name: *name, Platform: *platform})
+	if err != nil {
+		log.Printf("register failed: %v", err)
+		return 1
+	}
+	path, err := saveLink(*ksPath, *coord, *pass, link)
+	if err != nil {
+		log.Printf("save keystore: %v", err)
+		return 1
+	}
+	fmt.Printf("registered user=%s device=%s\nkeystore=%s\n", link.UserID, link.DeviceID, path)
+	return 0
+}
+
+func cmdLogin(args []string) int {
+	fs := flag.NewFlagSet("login", flag.ExitOnError)
+	coord := fs.String("coord", "http://localhost:8080", "coordinator base URL")
+	email := fs.String("email", "", "account email")
+	password := fs.String("password", "", "account password")
+	name := fs.String("name", "", "device display name")
+	platform := fs.String("platform", "", "device platform (default: GOOS)")
+	ksPath := fs.String("keystore", "", "keystore path")
+	pass := fs.String("passphrase", "", "optional keystore passphrase wrap")
+	_ = fs.Parse(args)
+
+	if *email == "" || *password == "" || *name == "" {
+		log.Printf("-email, -password, and -name are required")
+		return 2
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	c := client.New(*coord, "")
+	link, err := c.Login(ctx, *email, *password, client.DeviceInfo{Name: *name, Platform: *platform})
+	if err != nil {
+		log.Printf("login failed: %v", err)
+		return 1
+	}
+	path, err := saveLink(*ksPath, *coord, *pass, link)
+	if err != nil {
+		log.Printf("save keystore: %v", err)
+		return 1
+	}
+	fmt.Printf("linked user=%s device=%s\nkeystore=%s\n", link.UserID, link.DeviceID, path)
+	return 0
+}
+
+func cmdPairCode(args []string) int {
+	fs := flag.NewFlagSet("pair-code", flag.ExitOnError)
+	ksPath := fs.String("keystore", "", "keystore path")
+	pass := fs.String("passphrase", "", "keystore passphrase if wrap=passphrase")
+	_ = fs.Parse(args)
+
+	rec, path, err := loadKeystore(*ksPath, *pass)
+	if err != nil {
+		log.Printf("%v", err)
+		return 1
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	c := client.New(rec.CoordURL, rec.Secrets.Token)
+	code, exp, err := c.CreatePairingCode(ctx)
+	if err != nil {
+		log.Printf("pair-code failed: %v", err)
+		return 1
+	}
+	fmt.Printf("pairing code: %s\nexpires_at:  %s\n(from keystore %s)\n", code, exp.UTC().Format(time.RFC3339), path)
+	return 0
+}
+
+func cmdPair(args []string) int {
+	fs := flag.NewFlagSet("pair", flag.ExitOnError)
+	coord := fs.String("coord", "http://localhost:8080", "coordinator base URL")
+	code := fs.String("code", "", "pairing code from another device")
+	name := fs.String("name", "", "device display name")
+	platform := fs.String("platform", "", "device platform (default: GOOS)")
+	ksPath := fs.String("keystore", "", "keystore path")
+	pass := fs.String("passphrase", "", "optional keystore passphrase wrap")
+	_ = fs.Parse(args)
+
+	if *code == "" || *name == "" {
+		log.Printf("-code and -name are required")
+		return 2
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	c := client.New(*coord, "")
+	link, err := c.RedeemPairingCode(ctx, *code, client.DeviceInfo{Name: *name, Platform: *platform})
+	if err != nil {
+		log.Printf("pair failed: %v", err)
+		return 1
+	}
+	path, err := saveLink(*ksPath, *coord, *pass, link)
+	if err != nil {
+		log.Printf("save keystore: %v", err)
+		return 1
+	}
+	fmt.Printf("paired user=%s device=%s\nkeystore=%s\n", link.UserID, link.DeviceID, path)
+	return 0
 }
 
 func cmdStatus(args []string) int {
@@ -129,6 +269,35 @@ func cmdRun(args []string) int {
 	return 0
 }
 
+func saveLink(path, coordURL, passphrase string, link client.LinkResult) (string, error) {
+	if path == "" {
+		p, err := keystore.DefaultPath()
+		if err != nil {
+			return "", err
+		}
+		path = p
+	}
+	opts := keystore.Options{}
+	if passphrase != "" {
+		opts.Method = keystore.WrapPassphrase
+		opts.Passphrase = passphrase
+	}
+	rec := keystore.Record{
+		UserID:    link.UserID,
+		DeviceID:  link.DeviceID,
+		CoordURL:  coordURL,
+		PublicKey: link.PublicKey,
+		Secrets: keystore.Secrets{
+			PrivateKey: link.PrivateKey,
+			Token:      link.Token,
+		},
+	}
+	if err := keystore.Save(path, rec, opts); err != nil {
+		return path, err
+	}
+	return path, nil
+}
+
 func loadKeystore(path, passphrase string) (keystore.Record, string, error) {
 	if path == "" {
 		p, err := keystore.DefaultPath()
@@ -140,7 +309,7 @@ func loadKeystore(path, passphrase string) (keystore.Record, string, error) {
 	rec, err := keystore.Load(path, passphrase)
 	if err != nil {
 		if err == keystore.ErrNotFound {
-			return keystore.Record{}, path, fmt.Errorf("%w — link a device first (P2.7 adds register/login/pair)", err)
+			return keystore.Record{}, path, fmt.Errorf("%w — run register, login, or pair first", err)
 		}
 		return keystore.Record{}, path, err
 	}
