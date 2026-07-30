@@ -1,4 +1,5 @@
 ## Decision 7 (deferred — not locked in Phase 1)
+Phase: Deferred → revisit in Phases 4–5
 Question
 --------
 What do we choose for conflict resolution, chunking, and realtime metadata

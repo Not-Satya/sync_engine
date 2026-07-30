@@ -1,4 +1,6 @@
 ## Decision 10
+Phase: 2
+Subphase: P2.4 / P2.7
 Question
 --------
 How should a second (or Nth) device join an account without always typing the

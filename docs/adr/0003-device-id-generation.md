@@ -1,4 +1,5 @@
 ## Decision 3
+Phase: 1
 Question
 --------
 How is DeviceID generated and how stable is it?

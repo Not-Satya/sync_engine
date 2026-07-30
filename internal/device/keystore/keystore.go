@@ -15,10 +15,10 @@ const (
 )
 
 var (
-	ErrNotFound           = errors.New("keystore not found")
-	ErrCorrupt            = errors.New("keystore corrupt")
-	ErrWrongPassphrase    = errors.New("wrong passphrase")
-	ErrUnsupportedWrap    = errors.New("unsupported wrap method")
+	ErrNotFound       = errors.New("keystore not found")
+	ErrCorrupt        = errors.New("keystore corrupt")
+	ErrWrongPassphrase = errors.New("wrong passphrase")
+	ErrUnsupportedWrap = errors.New("unsupported wrap method")
 	ErrPassphraseRequired = errors.New("passphrase required")
 )
 
@@ -47,20 +47,20 @@ type Record struct {
 
 // fileDoc is the on-disk JSON shape (ciphertext + metadata only).
 type fileDoc struct {
-	Version      int        `json:"version"`
-	UserID       string     `json:"user_id"`
-	DeviceID     string     `json:"device_id"`
-	CoordURL     string     `json:"coord_url"`
-	PublicKeyHex string     `json:"public_key_hex"`
-	Wrap         wrapMeta   `json:"wrap"`
-	PrivateKey   sealedBlob `json:"private_key"`
-	Token        sealedBlob `json:"token"`
+	Version      int            `json:"version"`
+	UserID       string         `json:"user_id"`
+	DeviceID     string         `json:"device_id"`
+	CoordURL     string         `json:"coord_url"`
+	PublicKeyHex string         `json:"public_key_hex"`
+	Wrap         wrapMeta       `json:"wrap"`
+	PrivateKey   sealedBlob     `json:"private_key"`
+	Token        sealedBlob     `json:"token"`
 }
 
 type wrapMeta struct {
 	Method     WrapMethod `json:"method"`
 	SaltB64    string     `json:"salt,omitempty"`
-	WrappedKey string     `json:"wrapped_key"`     // base64 ciphertext of 32-byte data key
+	WrappedKey string     `json:"wrapped_key"` // base64 ciphertext of 32-byte data key
 	NonceB64   string     `json:"nonce,omitempty"` // for passphrase-wrapped key
 }
 

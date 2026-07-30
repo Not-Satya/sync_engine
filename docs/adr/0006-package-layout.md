@@ -1,4 +1,5 @@
 ## Decision 6
+Phase: 1
 Question
 --------
 How should packages be laid out so Layer 2 (system design) stays separable

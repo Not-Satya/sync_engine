@@ -1,4 +1,5 @@
 ## Decision 5
+Phase: 1 (stack lock); applies project-wide
 Question
 --------
 Is the proposed stack (Go, chi, modernc.org/sqlite, fsnotify, AES-256-GCM,

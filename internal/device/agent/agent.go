@@ -13,10 +13,10 @@ const DefaultHeartbeatInterval = 20 * time.Second
 
 // Config drives the long-running agent loop.
 type Config struct {
-	Client   *client.Client
-	Interval time.Duration
-	Endpoint string // optional dial hint for later P2P
-	Logger   *log.Logger
+	Client    *client.Client
+	Interval  time.Duration
+	Endpoint  string // optional dial hint for later P2P
+	Logger    *log.Logger
 }
 
 // Run heartbeats until ctx is cancelled. It does not watch the filesystem.

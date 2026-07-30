@@ -1,4 +1,5 @@
 ## Decision 2
+Phase: 1
 Question
 --------
 How do devices authenticate to the coordination server in v1?

@@ -1,4 +1,5 @@
 ## Decision 4
+Phase: 1 (heartbeat); WebSocket deferred to Phase 4+
 Question
 --------
 How do devices advertise online/offline presence to the coordinator in Phase 1,

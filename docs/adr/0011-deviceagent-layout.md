@@ -1,4 +1,6 @@
 ## Decision 11
+Phase: 2
+Subphase: P2.6
 Question
 --------
 Where does the Phase 2 device-side agent live in the repo, relative to the

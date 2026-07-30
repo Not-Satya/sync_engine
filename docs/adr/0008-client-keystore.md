@@ -1,4 +1,6 @@
 ## Decision 8
+Phase: 2
+Subphase: P2.5
 Question
 --------
 How does a device persist its private key and bearer token on disk so it can

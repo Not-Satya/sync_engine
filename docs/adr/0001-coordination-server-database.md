@@ -1,4 +1,5 @@
 ## Decision 1
+Phase: 1
 Question
 --------
 What database should the coordination server use for accounts, devices, auth,

@@ -1,4 +1,6 @@
 ## Decision 9
+Phase: 2
+Subphase: P2.1 / P2.8
 Question
 --------
 What does "revoke a device" mean on the coordinator, and how does it interact

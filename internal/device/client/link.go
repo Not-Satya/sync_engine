@@ -27,10 +27,10 @@ type LinkResult struct {
 }
 
 type authAPIResponse struct {
-	UserID              string `json:"user_id"`
-	Token               string `json:"token"`
+	UserID             string `json:"user_id"`
+	Token              string `json:"token"`
 	DevicePrivateKeyHex string `json:"device_private_key_hex"`
-	Device              struct {
+	Device             struct {
 		DeviceID     string `json:"device_id"`
 		Name         string `json:"name"`
 		Platform     string `json:"platform"`
@@ -39,9 +39,9 @@ type authAPIResponse struct {
 }
 
 type pairingCodeResult struct {
-	Code       string    `json:"code"`
-	ExpiresAt  time.Time `json:"expires_at"`
-	TTLSeconds int       `json:"ttl_seconds"`
+	Code      string    `json:"code"`
+	ExpiresAt time.Time `json:"expires_at"`
+	TTLSeconds int      `json:"ttl_seconds"`
 }
 
 // DefaultPlatform returns a coarse OS label for device registration.

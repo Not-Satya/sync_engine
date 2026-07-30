@@ -15,14 +15,14 @@ func TestRegisterAndPairingCode(t *testing.T) {
 		priv := make([]byte, 64)
 		pub := make([]byte, 32)
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"user_id":                "usr_1",
-			"token":                  "tok_abc",
+			"user_id": "usr_1",
+			"token":   "tok_abc",
 			"device_private_key_hex": hex.EncodeToString(priv),
 			"device": map[string]any{
-				"device_id":      "dev_1",
-				"name":           "Laptop",
-				"platform":       "windows",
-				"public_key_hex": hex.EncodeToString(pub),
+				"device_id":       "dev_1",
+				"name":            "Laptop",
+				"platform":        "windows",
+				"public_key_hex":  hex.EncodeToString(pub),
 			},
 		})
 	})
@@ -32,9 +32,9 @@ func TestRegisterAndPairingCode(t *testing.T) {
 			return
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"code":        "ABCD1234",
-			"ttl_seconds": 600,
-			"expires_at":  "2030-01-01T00:00:00Z",
+			"code":         "ABCD1234",
+			"ttl_seconds":  600,
+			"expires_at":   "2030-01-01T00:00:00Z",
 		})
 	})
 	srv := httptest.NewServer(mux)
