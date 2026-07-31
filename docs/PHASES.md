@@ -34,11 +34,11 @@
 
 | ID | Slice |
 |---|---|
-| P3.0 | ADRs (binding model, path rules, local store) |
-| P3.1 | Local FolderID ↔ path binding store |
-| P3.2 | Coord HTTP client for folders + subscriptions |
-| P3.3 | Agent CLI: create / list / subscribe / bind |
-| P3.4 | Path validation + uniqueness |
-| P3.5 | `folders status` (bindings only; no watch) |
+| P3.0 | ADRs (binding model, path rules, local store) | Done |
+| P3.1 | Local FolderID ↔ path binding store | Done |
+| P3.2 | Coord HTTP client for folders + subscriptions | Pending |
+| P3.3 | Agent CLI: create / list / subscribe / bind | Pending |
+| P3.4 | Path validation + uniqueness | Pending |
+| P3.5 | `folders status` (bindings only; no watch) | Pending |
 
 Decisions live in `docs/adr/` and are tagged with `Phase` / `Subphase` in each file.
