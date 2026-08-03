@@ -39,6 +39,8 @@ func main() {
 		os.Exit(cmdRevoke(os.Args[2:]))
 	case "logout":
 		os.Exit(cmdLogout(os.Args[2:]))
+	case "folders":
+		os.Exit(cmdFolders(os.Args[2:]))
 	case "status":
 		os.Exit(cmdStatus(os.Args[2:]))
 	case "run":
@@ -63,6 +65,7 @@ Usage:
   deviceagent devices  [-keystore path] [-passphrase s]
   deviceagent revoke   -device-id ID [-keystore path] [-passphrase s]
   deviceagent logout   [-keystore path] [-passphrase s]
+  deviceagent folders  <create|list|subscribe|unsubscribe|bind|unbind|add> ...
   deviceagent status   [-keystore path] [-passphrase s]
   deviceagent run      [-keystore path] [-passphrase s] [-interval 20s] [-endpoint addr]
 
@@ -74,6 +77,7 @@ Commands:
   devices    List account devices (marks this device / revoked)
   revoke     Soft-revoke another device (or self with -device-id)
   logout     Revoke this device on the server and delete local keystore
+  folders    Create/list/subscribe/bind sync folders (see: deviceagent folders help)
   status     Load keystore, GET /v1/me
   run        Heartbeat loop until Ctrl+C
 `)

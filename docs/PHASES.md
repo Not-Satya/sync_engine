@@ -37,7 +37,7 @@
 | P3.0 | ADRs (binding model, path rules, local store) | Done |
 | P3.1 | Local FolderID ↔ path binding store | Done |
 | P3.2 | Coord HTTP client for folders + subscriptions | Done |
-| P3.3 | Agent CLI: create / list / subscribe / bind | Pending |
+| P3.3 | Agent CLI: create / list / subscribe / bind | Done |
 | P3.4 | Path validation + uniqueness | Pending |
 | P3.5 | `folders status` (bindings only; no watch) | Pending |
 
