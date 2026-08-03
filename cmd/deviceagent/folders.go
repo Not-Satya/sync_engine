@@ -22,6 +22,8 @@ func cmdFolders(args []string) int {
 		return cmdFoldersCreate(args[1:])
 	case "list":
 		return cmdFoldersList(args[1:])
+	case "status":
+		return cmdFoldersStatus(args[1:])
 	case "subscribe":
 		return cmdFoldersSubscribe(args[1:])
 	case "unsubscribe":
@@ -48,6 +50,7 @@ func foldersUsage() {
 Usage:
   deviceagent folders create      -name Movies
   deviceagent folders list
+  deviceagent folders status
   deviceagent folders subscribe   -folder-id ID
   deviceagent folders unsubscribe -folder-id ID
   deviceagent folders bind        -folder-id ID -path DIR
@@ -60,6 +63,8 @@ Notes:
   create/subscribe talk to the coordinator (no local path).
   bind/unbind update device-local folder_bindings.json only.
   add = create + subscribe + bind (convenience).
+  list = account folders from server + local path if bound.
+  status = local bindings + path health (no fsnotify / no file sync yet).
   Paths must exist and be directories (validated on bind/add).
 `)
 }
@@ -148,6 +153,49 @@ func cmdFoldersList(args []string) int {
 			path = b.LocalPath
 		}
 		fmt.Printf("%s  %-20s  subscribed=%-3s  path=%s\n", f.FolderID, f.Name, sub, path)
+	}
+	return 0
+}
+
+func cmdFoldersStatus(args []string) int {
+	fs := flag.NewFlagSet("folders status", flag.ExitOnError)
+	ksPath, pass, bindPath := addAuthFlags(fs)
+	_ = fs.Parse(args)
+
+	// Keystore proves this machine is linked; status itself is local-only.
+	if _, _, err := loadKeystore(*ksPath, *pass); err != nil {
+		log.Printf("%v", err)
+		return 1
+	}
+	store, err := openBindings(*bindPath)
+	if err != nil {
+		log.Printf("%v", err)
+		return 1
+	}
+
+	rows, err := store.Status()
+	if err != nil {
+		log.Printf("status failed: %v", err)
+		return 1
+	}
+	if len(rows) == 0 {
+		fmt.Println("(no local folder bindings)")
+		fmt.Println("hint: deviceagent folders add -name Movies -path <dir>")
+		return 0
+	}
+
+	ok, bad := 0, 0
+	for _, r := range rows {
+		fmt.Println(r.String())
+		if r.Health == bindings.PathOK {
+			ok++
+		} else {
+			bad++
+		}
+	}
+	fmt.Printf("summary: %d binding(s), %d ok, %d problem(s) — watching starts in Phase 4\n", len(rows), ok, bad)
+	if bad > 0 {
+		return 1
 	}
 	return 0
 }

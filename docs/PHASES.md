@@ -10,7 +10,7 @@
 |---|---|---|
 | **1** | Done | Coordination server: accounts, devices, tokens, folders, subscriptions, presence |
 | **2** | Done | Auth hardening + deviceagent: revoke, rotate, pairing, keystore, register/login/pair/logout |
-| **3** | In progress | Device folder bindings: local path ↔ FolderID; subscribe from agent; **no fsnotify yet** |
+| **3** | Done | Device folder bindings: local path ↔ FolderID; subscribe from agent; **no fsnotify yet** |
 | **4** | Planned | Metadata sync loop (watch + sync names/hashes/versions via coordinator) |
 | **5** | Planned | Peer-to-peer file byte transfer |
 | **6** | Planned | Delete (all devices) vs remove-local-copy (this device) |
@@ -39,6 +39,6 @@
 | P3.2 | Coord HTTP client for folders + subscriptions | Done |
 | P3.3 | Agent CLI: create / list / subscribe / bind | Done |
 | P3.4 | Path validation + uniqueness | Done |
-| P3.5 | `folders status` (bindings only; no watch) | Pending |
+| P3.5 | `folders status` (bindings only; no watch) | Done |
 
 Decisions live in `docs/adr/` and are tagged with `Phase` / `Subphase` in each file.

@@ -65,7 +65,7 @@ Usage:
   deviceagent devices  [-keystore path] [-passphrase s]
   deviceagent revoke   -device-id ID [-keystore path] [-passphrase s]
   deviceagent logout   [-keystore path] [-passphrase s]
-  deviceagent folders  <create|list|subscribe|unsubscribe|bind|unbind|add> ...
+  deviceagent folders  <create|list|status|subscribe|unsubscribe|bind|unbind|add> ...
   deviceagent status   [-keystore path] [-passphrase s]
   deviceagent run      [-keystore path] [-passphrase s] [-interval 20s] [-endpoint addr]
 
