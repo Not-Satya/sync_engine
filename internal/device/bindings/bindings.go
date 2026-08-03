@@ -89,7 +89,7 @@ func (s *Store) Get(folderID string) (Binding, error) {
 	return Binding{}, ErrNotFound
 }
 
-// GetByPath returns the binding for an exact local_path string.
+// GetByPath returns the binding for localPath (path equality is OS-aware).
 func (s *Store) GetByPath(localPath string) (Binding, error) {
 	doc, err := s.read()
 	if err != nil {
@@ -99,7 +99,7 @@ func (s *Store) GetByPath(localPath string) (Binding, error) {
 		return Binding{}, err
 	}
 	for _, b := range doc.Bindings {
-		if b.LocalPath == localPath {
+		if PathsEqual(b.LocalPath, localPath) {
 			return b, nil
 		}
 	}
@@ -108,6 +108,7 @@ func (s *Store) GetByPath(localPath string) (Binding, error) {
 
 // Put inserts or replaces a binding by folder_id.
 // Fails with ErrConflict if local_path is already used by a different folder_id.
+// Callers should pass a path from ValidateAndNormalizePath for new binds.
 func (s *Store) Put(b Binding) error {
 	if b.FolderID == "" || b.LocalPath == "" {
 		return fmt.Errorf("folder_id and local_path required")
@@ -115,6 +116,7 @@ func (s *Store) Put(b Binding) error {
 	if b.BoundAt.IsZero() {
 		b.BoundAt = time.Now().UTC()
 	}
+	b.LocalPath = filepath.Clean(b.LocalPath)
 
 	doc, err := s.read()
 	if err != nil && !errors.Is(err, ErrNotFound) {
@@ -125,7 +127,7 @@ func (s *Store) Put(b Binding) error {
 	}
 
 	for _, existing := range doc.Bindings {
-		if existing.LocalPath == b.LocalPath && existing.FolderID != b.FolderID {
+		if PathsEqual(existing.LocalPath, b.LocalPath) && existing.FolderID != b.FolderID {
 			return fmt.Errorf("%w: path already bound to %s", ErrConflict, existing.FolderID)
 		}
 	}
@@ -143,6 +145,16 @@ func (s *Store) Put(b Binding) error {
 	}
 	doc.Version = FileVersion
 	return s.write(doc)
+}
+
+// PutValidated validates/normalizes local_path then Put.
+func (s *Store) PutValidated(b Binding) error {
+	normalized, err := ValidateAndNormalizePath(b.LocalPath)
+	if err != nil {
+		return err
+	}
+	b.LocalPath = normalized
+	return s.Put(b)
 }
 
 // Remove deletes the binding for folderID.

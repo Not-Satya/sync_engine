@@ -64,9 +64,10 @@ func TestPutGetListRemove(t *testing.T) {
 func TestPutPathConflict(t *testing.T) {
 	dir := t.TempDir()
 	store := Open(filepath.Join(dir, "folder_bindings.json"))
+	shared := filepath.Join(dir, "shared")
 
-	_ = store.Put(Binding{FolderID: "fld_a", LocalPath: `/data/a`, Subscribed: true})
-	err := store.Put(Binding{FolderID: "fld_b", LocalPath: `/data/a`, Subscribed: true})
+	_ = store.Put(Binding{FolderID: "fld_a", LocalPath: shared, Subscribed: true})
+	err := store.Put(Binding{FolderID: "fld_b", LocalPath: shared, Subscribed: true})
 	if !errors.Is(err, ErrConflict) {
 		t.Fatalf("want ErrConflict, got %v", err)
 	}
@@ -75,13 +76,15 @@ func TestPutPathConflict(t *testing.T) {
 func TestPutReplaceSameFolder(t *testing.T) {
 	dir := t.TempDir()
 	store := Open(filepath.Join(dir, "folder_bindings.json"))
+	oldPath := filepath.Join(dir, "old")
+	newPath := filepath.Join(dir, "new")
 
-	_ = store.Put(Binding{FolderID: "fld_a", LocalPath: `/old`, Name: "A", Subscribed: true})
-	if err := store.Put(Binding{FolderID: "fld_a", LocalPath: `/new`, Name: "A2", Subscribed: false}); err != nil {
+	_ = store.Put(Binding{FolderID: "fld_a", LocalPath: oldPath, Name: "A", Subscribed: true})
+	if err := store.Put(Binding{FolderID: "fld_a", LocalPath: newPath, Name: "A2", Subscribed: false}); err != nil {
 		t.Fatal(err)
 	}
 	list, _ := store.List()
-	if len(list) != 1 || list[0].LocalPath != `/new` || list[0].Name != "A2" {
+	if len(list) != 1 || !PathsEqual(list[0].LocalPath, newPath) || list[0].Name != "A2" {
 		t.Fatalf("replace: %+v", list)
 	}
 }

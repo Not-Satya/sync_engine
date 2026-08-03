@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/Not-Satya/sync_engine/internal/device/bindings"
@@ -61,7 +60,7 @@ Notes:
   create/subscribe talk to the coordinator (no local path).
   bind/unbind update device-local folder_bindings.json only.
   add = create + subscribe + bind (convenience).
-  Path existence checks land in P3.4; bind stores an absolute path.
+  Paths must exist and be directories (validated on bind/add).
 `)
 }
 
@@ -234,14 +233,8 @@ func cmdFoldersBind(args []string) int {
 		return 2
 	}
 
-	// Confirm device is linked; path validation hardens in P3.4.
 	if _, _, err := loadKeystore(*ksPath, *pass); err != nil {
 		log.Printf("%v", err)
-		return 1
-	}
-	abs, err := filepath.Abs(*path)
-	if err != nil {
-		log.Printf("resolve path: %v", err)
 		return 1
 	}
 
@@ -252,16 +245,17 @@ func cmdFoldersBind(args []string) int {
 	}
 	b := bindings.Binding{
 		FolderID:   *folderID,
-		LocalPath:  abs,
+		LocalPath:  *path,
 		Name:       *name,
 		Subscribed: true,
 		BoundAt:    time.Now().UTC(),
 	}
-	if err := store.Put(b); err != nil {
+	if err := store.PutValidated(b); err != nil {
 		log.Printf("bind failed: %v", err)
 		return 1
 	}
-	fmt.Printf("bound folder_id=%s path=%s\n", b.FolderID, b.LocalPath)
+	got, _ := store.Get(*folderID)
+	fmt.Printf("bound folder_id=%s path=%s\n", got.FolderID, got.LocalPath)
 	return 0
 }
 
@@ -307,9 +301,11 @@ func cmdFoldersAdd(args []string) int {
 		log.Printf("%v", err)
 		return 1
 	}
-	abs, err := filepath.Abs(*path)
+
+	// Validate path before creating anything on the server.
+	normalized, err := bindings.ValidateAndNormalizePath(*path)
 	if err != nil {
-		log.Printf("resolve path: %v", err)
+		log.Printf("invalid path: %v", err)
 		return 1
 	}
 
@@ -334,7 +330,7 @@ func cmdFoldersAdd(args []string) int {
 	}
 	if err := store.Put(bindings.Binding{
 		FolderID:   f.FolderID,
-		LocalPath:  abs,
+		LocalPath:  normalized,
 		Name:       f.Name,
 		Subscribed: true,
 		BoundAt:    time.Now().UTC(),
@@ -342,7 +338,7 @@ func cmdFoldersAdd(args []string) int {
 		log.Printf("bind failed: %v", err)
 		return 1
 	}
-	fmt.Printf("added folder_id=%s name=%s path=%s\n", f.FolderID, f.Name, abs)
+	fmt.Printf("added folder_id=%s name=%s path=%s\n", f.FolderID, f.Name, normalized)
 	return 0
 }
 

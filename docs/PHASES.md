@@ -38,7 +38,7 @@
 | P3.1 | Local FolderID ↔ path binding store | Done |
 | P3.2 | Coord HTTP client for folders + subscriptions | Done |
 | P3.3 | Agent CLI: create / list / subscribe / bind | Done |
-| P3.4 | Path validation + uniqueness | Pending |
+| P3.4 | Path validation + uniqueness | Done |
 | P3.5 | `folders status` (bindings only; no watch) | Pending |
 
 Decisions live in `docs/adr/` and are tagged with `Phase` / `Subphase` in each file.
