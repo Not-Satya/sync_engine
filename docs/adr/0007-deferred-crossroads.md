@@ -1,5 +1,5 @@
-## Decision 7 (deferred — not locked in Phase 1)
-Phase: Deferred → revisit in Phases 4–5
+## Decision 7 (deferred — partially resolved in Phase 4)
+Phase: 1 deferred → Phase 4–5
 Question
 --------
 What do we choose for conflict resolution, chunking, and realtime metadata
@@ -13,12 +13,16 @@ Realtime metadata: WebSocket | long poll | push wake (FCM) + pull
 
 Decision
 --------
-Deferred. Tentative lean (not binding): HLC + LWW for personal file metadata;
-content-defined chunking evaluated before locking go-bsdiff as the primary
-delta path; WebSocket for metadata fan-out (see ADR 4).
+**Phase 4 locks:**
+- Conflict / ordering → HLC + LWW (ADR 16)
+- Metadata transport → HTTP push/pull + poll first (ADR 19); WebSocket later
+- Content identity for metadata → SHA-256 whole file (ADR 17)
+
+**Still deferred to Phase 5:**
+- Chunking strategy (CDC vs fixed vs bsdiff)
+- P2P byte transfer encryption details (AES-256-GCM already stacked)
 
 Reason
 ------
-These are Layer 3 choices. Locking them before a folder subscription model and
-metadata sync loop exists produces speculative code. Phase 1 only needs
-identity, auth, folders, subscriptions, and presence.
+Phase 4 needs clocks and a metadata wire path; it does not need chunking.
+Keeping ADR 7 as the index avoids orphaning the original deferral note.
