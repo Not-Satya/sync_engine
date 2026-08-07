@@ -57,6 +57,9 @@ func (s *Server) Handler() http.Handler {
 			r.Delete("/folders/{folderID}/subscriptions", s.handleUnsubscribe)
 			r.Get("/subscriptions", s.handleListSubscriptions)
 
+			r.Post("/folders/{folderID}/events", s.handlePushFolderEvents)
+			r.Get("/folders/{folderID}/events", s.handlePullFolderEvents)
+
 			r.Post("/presence/heartbeat", s.handleHeartbeat)
 			r.Get("/presence", s.handleListPresence)
 		})

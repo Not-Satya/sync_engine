@@ -71,4 +71,24 @@ CREATE TABLE IF NOT EXISTS pairing_codes (
 );
 
 CREATE INDEX IF NOT EXISTS idx_pairing_codes_user ON pairing_codes(user_id);
+
+-- Metadata-only event log (ADR 15). Never store file bytes here.
+CREATE TABLE IF NOT EXISTS folder_events (
+    seq          INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id     TEXT NOT NULL,
+    folder_id    TEXT NOT NULL REFERENCES folders(folder_id) ON DELETE CASCADE,
+    device_id    TEXT NOT NULL REFERENCES devices(device_id),
+    op           TEXT NOT NULL CHECK (op IN ('upsert', 'delete', 'rename')),
+    path         TEXT NOT NULL,
+    old_path     TEXT,
+    size         INTEGER NOT NULL DEFAULT 0,
+    content_hash TEXT NOT NULL DEFAULT '',
+    mtime        TEXT,
+    hlc_wall     INTEGER NOT NULL,
+    hlc_counter  INTEGER NOT NULL,
+    created_at   TEXT NOT NULL,
+    UNIQUE (folder_id, event_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_folder_events_folder_seq ON folder_events(folder_id, seq);
 `
