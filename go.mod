@@ -3,6 +3,7 @@ module github.com/Not-Satya/sync_engine
 go 1.26.3
 
 require (
+	github.com/fsnotify/fsnotify v1.10.1
 	github.com/go-chi/chi/v5 v5.3.1
 	golang.org/x/crypto v0.54.0
 	golang.org/x/sys v0.47.0
