@@ -48,9 +48,9 @@
 | P4.0 | ADRs (event log, HLC/LWW, hash, watch, HTTP transport) | Done |
 | P4.1 | Server: metadata event schema + push/pull API | Done |
 | P4.2 | Device: local file index (SQLite) for subscribed folders | Done |
-| P4.3 | Device: fsnotify watcher + debounce | Pending |
-| P4.4 | Device: hash/scan + outbox | Pending |
-| P4.5 | Device: push/pull apply loop | Pending |
+| P4.3 | Device: fsnotify watcher + debounce | Done |
+| P4.4 | Device: hash/scan + outbox | Done |
+| P4.5 | Device: push/pull apply loop | Done |
 | P4.6 | Wire into `deviceagent run` + status counts | Pending |
 
 Decisions live in `docs/adr/` and are tagged with `Phase` / `Subphase` in each file.
