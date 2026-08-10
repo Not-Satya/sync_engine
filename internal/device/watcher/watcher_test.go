@@ -56,7 +56,7 @@ func TestWatcherDetectsCreateAndNestedDir(t *testing.T) {
 		t.Fatal(err)
 	}
 	time.Sleep(150 * time.Millisecond)
-	if err := os.WriteFile(filepath.Join(sub, "b.txt"), []byte("yo"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(sub, "b.txt"), []byte("ayo my man!"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if !collect(t, ctx, out, "sub/b.txt") {

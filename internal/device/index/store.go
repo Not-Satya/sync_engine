@@ -37,6 +37,22 @@ CREATE TABLE IF NOT EXISTS folder_cursors (
     folder_id TEXT PRIMARY KEY,
     last_seq  INTEGER NOT NULL DEFAULT 0
 );
+
+CREATE TABLE IF NOT EXISTS outbox (
+    event_id     TEXT PRIMARY KEY,
+    folder_id    TEXT NOT NULL,
+    op           TEXT NOT NULL,
+    path         TEXT NOT NULL,
+    old_path     TEXT NOT NULL DEFAULT '',
+    size         INTEGER NOT NULL DEFAULT 0,
+    content_hash TEXT NOT NULL DEFAULT '',
+    mtime        TEXT,
+    hlc_wall     INTEGER NOT NULL,
+    hlc_counter  INTEGER NOT NULL,
+    created_at   TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_outbox_folder ON outbox(folder_id, event_id);
 `
 
 // Store is the device-local metadata index (SQLite). No file bytes.

@@ -28,6 +28,12 @@ func NewToken() (string, error) {
 	return randomPrefixed("tok", 32)
 }
 
+// NewEventID returns a random opaque metadata-event identifier used as an
+// idempotency key when pushing folder events to the coordinator.
+func NewEventID() (string, error) {
+	return randomPrefixed("evt", 16)
+}
+
 // DeviceKeyMaterial holds the keypair used to derive a stable DeviceID.
 type DeviceKeyMaterial struct {
 	DeviceID   string
