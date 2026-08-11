@@ -151,9 +151,9 @@ func pushOutbox(ctx context.Context, cfg Config) (int, error) {
 		if _, err := cfg.Client.PushFolderEvents(ctx, cfg.FolderID, events); err != nil {
 			return total, err
 		}
-		// Ack the whole batch on HTTP success. Duplicates already on the
-		// server are omitted from "accepted" but must leave the outbox.
-		if err := cfg.Index.AckOutbox(ctx, ids); err != nil {
+		// Ack even if the parent ctx was cancelled during the HTTP round-trip;
+		// the coordinator already has these event_ids.
+		if err := cfg.Index.AckOutbox(context.WithoutCancel(ctx), ids); err != nil {
 			return total, err
 		}
 		total += len(ids)

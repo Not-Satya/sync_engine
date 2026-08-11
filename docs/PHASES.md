@@ -11,7 +11,7 @@
 | **1** | Done | Coordination server: accounts, devices, tokens, folders, subscriptions, presence |
 | **2** | Done | Auth hardening + deviceagent: revoke, rotate, pairing, keystore, register/login/pair/logout |
 | **3** | Done | Device folder bindings: local path ↔ FolderID; subscribe from agent; **no fsnotify yet** |
-| **4** | In progress | Metadata sync loop (watch + sync names/hashes/versions via coordinator) |
+| **4** | Done | Metadata sync loop (watch + sync names/hashes/versions via coordinator) |
 | **5** | Planned | Peer-to-peer file byte transfer |
 | **6** | Planned | Delete (all devices) vs remove-local-copy (this device) |
 | **7** | Post-MVP | Selective sync / placeholders |
@@ -51,6 +51,6 @@
 | P4.3 | Device: fsnotify watcher + debounce | Done |
 | P4.4 | Device: hash/scan + outbox | Done |
 | P4.5 | Device: push/pull apply loop | Done |
-| P4.6 | Wire into `deviceagent run` + status counts | Pending |
+| P4.6 | Wire into `deviceagent run` + status counts | Done |
 
 Decisions live in `docs/adr/` and are tagged with `Phase` / `Subphase` in each file.

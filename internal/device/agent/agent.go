@@ -19,7 +19,8 @@ type Config struct {
 	Logger    *log.Logger
 }
 
-// Run heartbeats until ctx is cancelled. It does not watch the filesystem.
+// Run heartbeats until ctx is cancelled. Filesystem watch + metadata sync
+// live in RunLoop (P4.6).
 func Run(ctx context.Context, cfg Config) error {
 	if cfg.Client == nil {
 		return errNilClient

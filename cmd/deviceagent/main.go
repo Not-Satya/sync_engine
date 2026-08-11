@@ -12,7 +12,9 @@ import (
 
 	"github.com/Not-Satya/sync_engine/internal/device/agent"
 	"github.com/Not-Satya/sync_engine/internal/device/client"
+	"github.com/Not-Satya/sync_engine/internal/device/index"
 	"github.com/Not-Satya/sync_engine/internal/device/keystore"
+	"github.com/Not-Satya/sync_engine/internal/device/syncer"
 )
 
 func main() {
@@ -67,7 +69,8 @@ Usage:
   deviceagent logout   [-keystore path] [-passphrase s]
   deviceagent folders  <create|list|status|subscribe|unsubscribe|bind|unbind|add> ...
   deviceagent status   [-keystore path] [-passphrase s]
-  deviceagent run      [-keystore path] [-passphrase s] [-interval 20s] [-endpoint addr]
+  deviceagent run      [-keystore path] [-passphrase s] [-bindings path] [-index path]
+                       [-interval 20s] [-sync-interval 5s] [-reconcile 5m] [-endpoint addr]
 
 Commands:
   register   Create account + first device; save encrypted keystore
@@ -79,7 +82,7 @@ Commands:
   logout     Revoke this device on the server and delete local keystore
   folders    Create/list/subscribe/bind sync folders (see: deviceagent folders help)
   status     Load keystore, GET /v1/me
-  run        Heartbeat loop until Ctrl+C
+  run        Heartbeat + watch bound folders + metadata push/pull until Ctrl+C
 `)
 }
 
@@ -355,7 +358,11 @@ func cmdRun(args []string) int {
 	fs := flag.NewFlagSet("run", flag.ExitOnError)
 	ksPath := fs.String("keystore", "", "keystore path (default: user config dir)")
 	pass := fs.String("passphrase", "", "keystore passphrase if wrap=passphrase")
+	bindPath := fs.String("bindings", "", "folder bindings path (default: user config dir)")
+	idxPath := fs.String("index", "", "file index db path (default: user config dir)")
 	interval := fs.Duration("interval", agent.DefaultHeartbeatInterval, "heartbeat interval")
+	syncInterval := fs.Duration("sync-interval", syncer.DefaultPollInterval, "metadata push/pull poll interval")
+	reconcile := fs.Duration("reconcile", agent.DefaultReconcileInterval, "full-folder rescan interval")
 	endpoint := fs.String("endpoint", "", "optional presence endpoint hint")
 	_ = fs.Parse(args)
 
@@ -365,26 +372,39 @@ func cmdRun(args []string) int {
 		return 1
 	}
 
+	store, err := openBindings(*bindPath)
+	if err != nil {
+		log.Printf("%v", err)
+		return 1
+	}
+	idx, err := openIndex(*idxPath)
+	if err != nil {
+		log.Printf("%v", err)
+		return 1
+	}
+	defer idx.Close()
+
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
 	c := client.New(rec.CoordURL, rec.Secrets.Token)
 	if err := c.Healthz(ctx); err != nil {
-		log.Printf("coordinator unreachable (%s): %v", rec.CoordURL, err)
-		return 1
+		log.Printf("coordinator unreachable (%s): %v — watching locally, sync will retry", rec.CoordURL, err)
+	} else if me, err := c.Me(ctx); err != nil {
+		log.Printf("/me failed: %v — continuing with keystore identity", err)
+	} else {
+		log.Printf("linked as %s (%s) via %s [keystore=%s]", me.UserID, rec.DeviceID, rec.CoordURL, path)
 	}
 
-	me, err := c.Me(ctx)
-	if err != nil {
-		log.Printf("/me failed: %v", err)
-		return 1
-	}
-	log.Printf("linked as %s (%s) via %s [keystore=%s]", me.UserID, rec.DeviceID, rec.CoordURL, path)
-
-	err = agent.Run(ctx, agent.Config{
-		Client:   c,
-		Interval: *interval,
-		Endpoint: *endpoint,
+	err = agent.RunLoop(ctx, agent.LoopConfig{
+		Client:    c,
+		Index:     idx,
+		Bindings:  store,
+		DeviceID:  rec.DeviceID,
+		Heartbeat: *interval,
+		SyncPoll:  *syncInterval,
+		Reconcile: *reconcile,
+		Endpoint:  *endpoint,
 	})
 	if err != nil && err != context.Canceled {
 		log.Printf("agent stopped: %v", err)
@@ -392,6 +412,17 @@ func cmdRun(args []string) int {
 	}
 	log.Printf("stopped")
 	return 0
+}
+
+func openIndex(path string) (*index.Store, error) {
+	if path == "" {
+		p, err := index.DefaultPath()
+		if err != nil {
+			return nil, err
+		}
+		path = p
+	}
+	return index.Open(path)
 }
 
 func saveLink(path, coordURL, passphrase string, link client.LinkResult) (string, error) {
