@@ -2,3 +2,7 @@
 /data/
 *.db
 *.db-*
+
+# Local study briefing (keep Markdown; don't publish PDF tooling/output)
+docs/SYSTEMS_BRIEFING.pdf
+scripts/generate_systems_briefing_pdf.py

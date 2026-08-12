@@ -57,7 +57,7 @@ func beat(ctx context.Context, cfg Config, logger *log.Logger) error {
 	if err != nil {
 		return err
 	}
-	logger.Printf("presence %s status=%s", p.DeviceID, p.Status)
+	logger.Printf("presence %s status=%s endpoint=%q", p.DeviceID, p.Status, p.Endpoint)
 	return nil
 }
 

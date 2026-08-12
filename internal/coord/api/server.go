@@ -59,6 +59,7 @@ func (s *Server) Handler() http.Handler {
 
 			r.Post("/folders/{folderID}/events", s.handlePushFolderEvents)
 			r.Get("/folders/{folderID}/events", s.handlePullFolderEvents)
+			r.Get("/folders/{folderID}/peers", s.handleListFolderPeers)
 
 			r.Post("/presence/heartbeat", s.handleHeartbeat)
 			r.Get("/presence", s.handleListPresence)

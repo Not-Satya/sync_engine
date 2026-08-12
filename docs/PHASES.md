@@ -12,7 +12,7 @@
 | **2** | Done | Auth hardening + deviceagent: revoke, rotate, pairing, keystore, register/login/pair/logout |
 | **3** | Done | Device folder bindings: local path ↔ FolderID; subscribe from agent; **no fsnotify yet** |
 | **4** | Done | Metadata sync loop (watch + sync names/hashes/versions via coordinator) |
-| **5** | Planned | Peer-to-peer file byte transfer |
+| **5** | In progress | Peer-to-peer file byte transfer |
 | **6** | Planned | Delete (all devices) vs remove-local-copy (this device) |
 | **7** | Post-MVP | Selective sync / placeholders |
 
@@ -52,5 +52,20 @@
 | P4.4 | Device: hash/scan + outbox | Done |
 | P4.5 | Device: push/pull apply loop | Done |
 | P4.6 | Wire into `deviceagent run` + status counts | Done |
+
+## Phase 5 subphases
+
+**Goal:** When metadata says a peer has content hash `H` and that peer is online, this device can pull the **file bytes** directly from that peer. The coordinator never sees those bytes — only introduces peers (presence + endpoint).
+
+| ID | Slice | Status |
+|---|---|---|
+| P5.0 | ADRs (chunking, introduction, crypto, listen, layout) | Done |
+| P5.1 | Advertise transfer endpoint via presence + peer discovery API | Done |
+| P5.2 | Device transfer listener + mutual handshake (Ed25519) | Pending |
+| P5.3 | Whole-file pull by content hash over AES-256-GCM stream | Pending |
+| P5.4 | Fetch planner: missing local blobs → pick online peer → pull | Pending |
+| P5.5 | Wire into `deviceagent run` + status shows transfer activity | Pending |
+
+**Explicitly out of Phase 5 v1:** NAT hole-punching / TURN byte relays, CDC/Rabin chunking, go-bsdiff as the primary path, server-side blob storage.
 
 Decisions live in `docs/adr/` and are tagged with `Phase` / `Subphase` in each file.

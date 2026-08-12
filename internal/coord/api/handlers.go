@@ -490,11 +490,17 @@ func (s *Server) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 	var req heartbeatRequest
 	_ = decodeJSON(r, &req) // endpoint optional
 
+	endpoint, err := model.NormalizeTransferEndpoint(req.Endpoint)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	now := time.Now().UTC()
 	p := model.Presence{
 		DeviceID:  dev.DeviceID,
 		Status:    model.PresenceOnline,
-		Endpoint:  strings.TrimSpace(req.Endpoint),
+		Endpoint:  endpoint,
 		UpdatedAt: now,
 	}
 	if err := s.store.UpsertPresence(r.Context(), p); err != nil {

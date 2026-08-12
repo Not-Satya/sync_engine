@@ -423,6 +423,46 @@ func (s *Store) ListPresenceForUser(ctx context.Context, userID string) ([]model
 	return out, rows.Err()
 }
 
+// ListOnlineFolderPeers returns online, non-revoked devices subscribed to folderID
+// excluding excludeDeviceID (ADR 26). Does not filter on endpoint emptiness.
+func (s *Store) ListOnlineFolderPeers(ctx context.Context, folderID, excludeDeviceID string) ([]model.FolderPeer, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT d.device_id, d.name, d.platform, d.public_key,
+		       p.endpoint, p.status, p.updated_at
+		FROM subscriptions sub
+		JOIN devices d ON d.device_id = sub.device_id
+		JOIN presence p ON p.device_id = sub.device_id
+		WHERE sub.folder_id = ?
+		  AND d.device_id != ?
+		  AND d.revoked_at IS NULL
+		  AND p.status = ?
+		ORDER BY d.name, d.device_id`, folderID, excludeDeviceID, string(model.PresenceOnline))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []model.FolderPeer
+	for rows.Next() {
+		var peer model.FolderPeer
+		var status string
+		var updated string
+		if err := rows.Scan(
+			&peer.DeviceID, &peer.Name, &peer.Platform, &peer.PublicKey,
+			&peer.Endpoint, &status, &updated,
+		); err != nil {
+			return nil, err
+		}
+		peer.Status = model.PresenceStatus(status)
+		t, err := time.Parse(time.RFC3339Nano, updated)
+		if err != nil {
+			return nil, err
+		}
+		peer.UpdatedAt = t
+		out = append(out, peer)
+	}
+	return out, rows.Err()
+}
+
 // ExpireStalePresence marks devices offline when heartbeat TTL has elapsed.
 func (s *Store) ExpireStalePresence(ctx context.Context, olderThan time.Time) (int64, error) {
 	res, err := s.db.ExecContext(ctx, `
