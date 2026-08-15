@@ -63,7 +63,7 @@
 | P5.1 | Advertise transfer endpoint via presence + peer discovery API | Done |
 | P5.2 | Device transfer listener + mutual handshake (Ed25519) | Done |
 | P5.3 | Whole-file pull by content hash over AES-256-GCM stream | Done |
-| P5.4 | Fetch planner: missing local blobs → pick online peer → pull | Pending |
+| P5.4 | Fetch planner: missing local blobs → pick online peer → pull | Done |
 | P5.5 | Wire into `deviceagent run` + status shows transfer activity | Pending |
 
 **Explicitly out of Phase 5 v1:** NAT hole-punching / TURN byte relays, CDC/Rabin chunking, go-bsdiff as the primary path, server-side blob storage.
