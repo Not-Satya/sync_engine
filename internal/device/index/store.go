@@ -188,6 +188,33 @@ func (s *Store) List(ctx context.Context, folderID string) ([]Entry, error) {
 	return out, rows.Err()
 }
 
+// FindByContentHash returns non-deleted entries with the given content hash
+// across all folders (used by the P2P blob server).
+func (s *Store) FindByContentHash(ctx context.Context, contentHash string) ([]Entry, error) {
+	if contentHash == "" {
+		return nil, nil
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT folder_id, path, size, content_hash, mtime,
+		       hlc_wall, hlc_counter, deleted, device_id, updated_at
+		FROM file_entries
+		WHERE content_hash = ? AND deleted = 0
+		ORDER BY folder_id, path`, contentHash)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Entry
+	for rows.Next() {
+		e, err := scanEntry(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
 // Count returns alive and tombstone counts for a folder.
 func (s *Store) Count(ctx context.Context, folderID string) (alive, tombstones int, err error) {
 	err = s.db.QueryRowContext(ctx, `

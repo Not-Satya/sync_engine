@@ -46,11 +46,11 @@ func TestCollectFolderReports(t *testing.T) {
 	if err != nil || len(reps) != 1 {
 		t.Fatalf("reports: %+v %v", reps, err)
 	}
-	if reps[0].Alive != 1 || reps[0].Cursor != 9 || reps[0].Outbox != 0 {
+	if reps[0].Alive != 1 || reps[0].Cursor != 9 || reps[0].Outbox != 0 || reps[0].Missing != 1 {
 		t.Fatalf("stats: %+v", reps[0])
 	}
 	s := reps[0].String()
-	if !strings.Contains(s, "files=1") || !strings.Contains(s, "cursor=9") {
+	if !strings.Contains(s, "files=1") || !strings.Contains(s, "cursor=9") || !strings.Contains(s, "missing=1") {
 		t.Fatalf("string: %s", s)
 	}
 }

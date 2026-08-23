@@ -70,7 +70,8 @@ Usage:
   deviceagent folders  <create|list|status|subscribe|unsubscribe|bind|unbind|add> ...
   deviceagent status   [-keystore path] [-passphrase s]
   deviceagent run      [-keystore path] [-passphrase s] [-bindings path] [-index path]
-                       [-interval 20s] [-sync-interval 5s] [-reconcile 5m] [-endpoint addr]
+                       [-interval 20s] [-sync-interval 5s] [-reconcile 5m]
+                       [-listen 127.0.0.1:7900] [-endpoint addr]
 
 Commands:
   register   Create account + first device; save encrypted keystore
@@ -82,7 +83,7 @@ Commands:
   logout     Revoke this device on the server and delete local keystore
   folders    Create/list/subscribe/bind sync folders (see: deviceagent folders help)
   status     Load keystore, GET /v1/me
-  run        Heartbeat + watch bound folders + metadata push/pull until Ctrl+C
+  run        Heartbeat + watch + metadata sync + P2P byte transfer until Ctrl+C
 `)
 }
 
@@ -363,12 +364,19 @@ func cmdRun(args []string) int {
 	interval := fs.Duration("interval", agent.DefaultHeartbeatInterval, "heartbeat interval")
 	syncInterval := fs.Duration("sync-interval", syncer.DefaultPollInterval, "metadata push/pull poll interval")
 	reconcile := fs.Duration("reconcile", agent.DefaultReconcileInterval, "full-folder rescan interval")
-	endpoint := fs.String("endpoint", "", "optional presence endpoint hint")
+	listen := fs.String("listen", agent.DefaultTransferListen, "TCP listen for P2P byte transfer")
+	endpoint := fs.String("endpoint", "", "optional presence endpoint override (default: listen addr)")
 	_ = fs.Parse(args)
 
 	rec, path, err := loadKeystore(*ksPath, *pass)
 	if err != nil {
 		log.Printf("%v", err)
+		return 1
+	}
+
+	identity, err := agent.IdentityFromKeyMaterial(rec.DeviceID, rec.PublicKey, rec.Secrets.PrivateKey)
+	if err != nil {
+		log.Printf("device identity: %v", err)
 		return 1
 	}
 
@@ -397,14 +405,16 @@ func cmdRun(args []string) int {
 	}
 
 	err = agent.RunLoop(ctx, agent.LoopConfig{
-		Client:    c,
-		Index:     idx,
-		Bindings:  store,
-		DeviceID:  rec.DeviceID,
-		Heartbeat: *interval,
-		SyncPoll:  *syncInterval,
-		Reconcile: *reconcile,
-		Endpoint:  *endpoint,
+		Client:     c,
+		Index:      idx,
+		Bindings:   store,
+		DeviceID:   rec.DeviceID,
+		Identity:   identity,
+		ListenAddr: *listen,
+		Heartbeat:  *interval,
+		SyncPoll:   *syncInterval,
+		Reconcile:  *reconcile,
+		Endpoint:   *endpoint,
 	})
 	if err != nil && err != context.Canceled {
 		log.Printf("agent stopped: %v", err)

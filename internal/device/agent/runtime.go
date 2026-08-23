@@ -2,9 +2,11 @@ package agent
 
 import (
 	"context"
+	"crypto/ed25519"
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"sync"
 	"time"
 
@@ -14,29 +16,34 @@ import (
 	"github.com/Not-Satya/sync_engine/internal/device/index"
 	"github.com/Not-Satya/sync_engine/internal/device/scanner"
 	"github.com/Not-Satya/sync_engine/internal/device/syncer"
+	"github.com/Not-Satya/sync_engine/internal/device/transfer"
 	"github.com/Not-Satya/sync_engine/internal/device/watcher"
 )
 
 // DefaultReconcileInterval is the full-folder rescan safety net (ADR 18).
 const DefaultReconcileInterval = 5 * time.Minute
 
-// LoopConfig drives heartbeat + watch + scan + metadata push/pull.
+// DefaultTransferListen is the default TCP bind for P2P byte transfer (ADR 23).
+const DefaultTransferListen = transfer.DefaultListenAddr
+
+// LoopConfig drives heartbeat + watch + scan + metadata push/pull + P2P transfer.
 type LoopConfig struct {
 	Client    *client.Client
 	Index     *index.Store
 	Bindings  *bindings.Store
 	DeviceID  string
+	Identity  transfer.Identity // required for transfer listen/fetch; zero disables P2P
+	ListenAddr string           // TCP listen; empty uses DefaultTransferListen when Identity set
 	Heartbeat time.Duration
 	SyncPoll  time.Duration
 	Reconcile time.Duration
 	Debounce  time.Duration
-	Endpoint  string
+	Endpoint  string // optional override for presence advertisement
 	Logger    *log.Logger
 }
 
-// RunLoop runs presence heartbeats, fsnotify watchers, hash/scan, and
-// coordinator metadata sync until ctx is cancelled. File bytes are never sent.
-// New bindings added while running are picked up on the next reconcile tick.
+// RunLoop runs presence heartbeats, fsnotify watchers, hash/scan, coordinator
+// metadata sync, and (when Identity is set) P2P transfer listen + fetch.
 func RunLoop(ctx context.Context, cfg LoopConfig) error {
 	if cfg.Client == nil {
 		return errNilClient
@@ -70,21 +77,80 @@ func RunLoop(ctx context.Context, cfg LoopConfig) error {
 		reconcile = DefaultReconcileInterval
 	}
 
+	xferEnabled := cfg.Identity.Validate() == nil
+	endpoint := cfg.Endpoint
+	var planner *transfer.Planner
+	if xferEnabled {
+		planner = &transfer.Planner{
+			Peers: cfg.Client,
+			Index: cfg.Index,
+			ID:    cfg.Identity,
+		}
+	}
+
 	rt := &runtime{
-		cfg:    cfg,
-		clock:  clock,
-		scan:   scan,
-		logger: logger,
+		cfg:      cfg,
+		clock:    clock,
+		scan:     scan,
+		planner:  planner,
+		logger:   logger,
+		endpoint: endpoint,
 	}
 
 	var wg sync.WaitGroup
+
+	if xferEnabled {
+		listenAddr := cfg.ListenAddr
+		if listenAddr == "" {
+			listenAddr = DefaultTransferListen
+		}
+		blob := transfer.IndexBlobStore{Index: cfg.Index, Bindings: cfg.Bindings}
+		ln, err := transfer.Listen(transfer.ListenConfig{
+			Addr:     listenAddr,
+			Identity: cfg.Identity,
+			Logger:   logger,
+			OnSession: func(sessCtx context.Context, sess *transfer.Session, conn net.Conn) {
+				defer conn.Close()
+				sc, err := transfer.NewSecureConn(conn, sess)
+				if err != nil {
+					logger.Printf("transfer secure: %v", err)
+					return
+				}
+				for {
+					if err := transfer.ServePull(sessCtx, sc, blob); err != nil {
+						return
+					}
+				}
+			},
+		})
+		if err != nil {
+			return fmt.Errorf("transfer listen: %w", err)
+		}
+		if endpoint == "" {
+			endpoint = ln.Endpoint()
+			rt.endpoint = endpoint
+		}
+		logger.Printf("transfer listening on %s (advertising %s)", ln.Endpoint(), endpoint)
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer ln.Close()
+			if err := ln.Serve(ctx); err != nil && !errors.Is(err, context.Canceled) {
+				logger.Printf("transfer listener stopped: %v", err)
+			}
+		}()
+	} else {
+		logger.Printf("transfer disabled (no device identity / key material)")
+	}
+
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		err := Run(ctx, Config{
 			Client:   cfg.Client,
 			Interval: heartbeat,
-			Endpoint: cfg.Endpoint,
+			Endpoint: endpoint,
 			Logger:   logger,
 		})
 		if err != nil && !errors.Is(err, context.Canceled) {
@@ -110,10 +176,12 @@ func RunLoop(ctx context.Context, cfg LoopConfig) error {
 }
 
 type runtime struct {
-	cfg    LoopConfig
-	clock  *hlc.Clock
-	scan   *scanner.Scanner
-	logger *log.Logger
+	cfg      LoopConfig
+	clock    *hlc.Clock
+	scan     *scanner.Scanner
+	planner  *transfer.Planner
+	logger   *log.Logger
+	endpoint string
 
 	mu      sync.Mutex
 	watched map[string]struct{}
@@ -185,6 +253,14 @@ func (rt *runtime) subscribedIDs() []string {
 	return ids
 }
 
+func (rt *runtime) bindingFor(folderID string) (bindings.Binding, bool) {
+	b, err := rt.cfg.Bindings.Get(folderID)
+	if err != nil {
+		return bindings.Binding{}, false
+	}
+	return b, true
+}
+
 func (rt *runtime) watchFolder(ctx context.Context, b bindings.Binding) {
 	w, err := watcher.New(watcher.Config{
 		Root:     b.LocalPath,
@@ -207,8 +283,6 @@ func (rt *runtime) watchFolder(ctx context.Context, b bindings.Binding) {
 
 	rt.logger.Printf("watching %s path=%s", b.FolderID, b.LocalPath)
 	rt.scanFolder(ctx, b)
-	// Always push/pull once after the initial tree scan (even if nothing changed)
-	// so a newly linked device catches up on remote metadata.
 	rt.syncOne(ctx, b.FolderID)
 
 	for {
@@ -291,4 +365,54 @@ func (rt *runtime) syncOne(ctx context.Context, folderID string) {
 		rt.logger.Printf("sync %s: pushed=%d pulled=%d applied=%d cursor=%d",
 			folderID, res.Pushed, res.Pulled, res.Applied, res.Cursor)
 	}
+	rt.fetchOne(ctx, folderID)
+}
+
+func (rt *runtime) fetchOne(ctx context.Context, folderID string) {
+	if rt.planner == nil {
+		return
+	}
+	b, ok := rt.bindingFor(folderID)
+	if !ok || !b.Subscribed {
+		return
+	}
+	if h, _ := bindings.CheckPath(b.LocalPath); h != bindings.PathOK {
+		return
+	}
+	results, err := rt.planner.FetchFolder(ctx, folderID, b.LocalPath)
+	if err != nil {
+		if ctx.Err() != nil {
+			return
+		}
+		rt.logger.Printf("fetch %s: %v", folderID, err)
+		return
+	}
+	fetched, failed := 0, 0
+	for _, r := range results {
+		if r.Fetched {
+			fetched++
+			rt.logger.Printf("fetch %s: got %s from %s", folderID, r.Candidate.Entry.Path, r.Peer.DeviceID)
+			continue
+		}
+		failed++
+		if r.Err != nil {
+			rt.logger.Printf("fetch %s: %s: %v", folderID, r.Candidate.Entry.Path, r.Err)
+		}
+	}
+	if fetched > 0 || failed > 0 {
+		rt.logger.Printf("fetch %s: fetched=%d pending=%d", folderID, fetched, failed)
+	}
+}
+
+// IdentityFromKeyMaterial builds a transfer.Identity from raw keystore bytes.
+func IdentityFromKeyMaterial(deviceID string, pub, priv []byte) (transfer.Identity, error) {
+	id := transfer.Identity{
+		DeviceID:   deviceID,
+		PublicKey:  ed25519.PublicKey(append([]byte(nil), pub...)),
+		PrivateKey: ed25519.PrivateKey(append([]byte(nil), priv...)),
+	}
+	if err := id.Validate(); err != nil {
+		return transfer.Identity{}, err
+	}
+	return id, nil
 }

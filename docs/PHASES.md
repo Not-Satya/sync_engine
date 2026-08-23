@@ -12,7 +12,7 @@
 | **2** | Done | Auth hardening + deviceagent: revoke, rotate, pairing, keystore, register/login/pair/logout |
 | **3** | Done | Device folder bindings: local path ↔ FolderID; subscribe from agent; **no fsnotify yet** |
 | **4** | Done | Metadata sync loop (watch + sync names/hashes/versions via coordinator) |
-| **5** | In progress | Peer-to-peer file byte transfer |
+| **5** | Done | Peer-to-peer file byte transfer |
 | **6** | Planned | Delete (all devices) vs remove-local-copy (this device) |
 | **7** | Post-MVP | Selective sync / placeholders |
 
@@ -64,7 +64,7 @@
 | P5.2 | Device transfer listener + mutual handshake (Ed25519) | Done |
 | P5.3 | Whole-file pull by content hash over AES-256-GCM stream | Done |
 | P5.4 | Fetch planner: missing local blobs → pick online peer → pull | Done |
-| P5.5 | Wire into `deviceagent run` + status shows transfer activity | Pending |
+| P5.5 | Wire into `deviceagent run` + status shows transfer activity | Done |
 
 **Explicitly out of Phase 5 v1:** NAT hole-punching / TURN byte relays, CDC/Rabin chunking, go-bsdiff as the primary path, server-side blob storage.
 
