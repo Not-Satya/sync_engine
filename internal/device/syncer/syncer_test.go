@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -188,6 +189,112 @@ func TestApplyRemoteLWWRejectsOlder(t *testing.T) {
 	// Cursor still advances past the observed older event.
 	if res.Cursor != 1 {
 		t.Fatalf("cursor=%d want 1", res.Cursor)
+	}
+}
+
+func TestSyncFolderRemoteDeleteUnlinksDisk(t *testing.T) {
+	ctx := context.Background()
+	idx := openIndex(t)
+	root := t.TempDir()
+	file := filepath.Join(root, "gone.txt")
+	if err := os.WriteFile(file, []byte("bye"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := idx.Upsert(ctx, index.Entry{
+		FolderID: "fld_1", Path: "gone.txt", Size: 3, ContentHash: "aa",
+		HLCWall: 10, HLCCounter: 0, DeviceID: "dev_local",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1/folders/fld_1/events", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			_ = json.NewEncoder(w).Encode(map[string]any{"accepted": []any{}, "max_seq": 0})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(client.PullEventsResult{
+			Events: []model.FolderEvent{{
+				Seq: 3, EventID: "evt_del", FolderID: "fld_1", DeviceID: "dev_peer",
+				Op: model.MetaOpDelete, Path: "gone.txt",
+				HLC: model.HLC{Wall: 100, Counter: 0},
+			}},
+			MaxSeq: 3,
+		})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	res, err := SyncFolder(ctx, Config{
+		Client:    client.New(srv.URL, "tok"),
+		Index:     idx,
+		Clock:     hlc.New(),
+		FolderID:  "fld_1",
+		LocalRoot: root,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Applied != 1 {
+		t.Fatalf("applied=%d want 1", res.Applied)
+	}
+	e, err := idx.Get(ctx, "fld_1", "gone.txt")
+	if err != nil || !e.Deleted {
+		t.Fatalf("want tombstone: %+v %v", e, err)
+	}
+	if _, err := os.Lstat(file); !os.IsNotExist(err) {
+		t.Fatalf("local file should be unlinked: %v", err)
+	}
+}
+
+func TestSyncFolderOlderDeleteDoesNotUnlink(t *testing.T) {
+	ctx := context.Background()
+	idx := openIndex(t)
+	root := t.TempDir()
+	file := filepath.Join(root, "keep.txt")
+	if err := os.WriteFile(file, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := idx.Upsert(ctx, index.Entry{
+		FolderID: "fld_1", Path: "keep.txt", Size: 4, ContentHash: "new",
+		HLCWall: 500, HLCCounter: 0, DeviceID: "dev_local",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1/folders/fld_1/events", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			_ = json.NewEncoder(w).Encode(map[string]any{"accepted": []any{}, "max_seq": 0})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(client.PullEventsResult{
+			Events: []model.FolderEvent{{
+				Seq: 1, EventID: "evt_old_del", FolderID: "fld_1", DeviceID: "dev_peer",
+				Op: model.MetaOpDelete, Path: "keep.txt",
+				HLC: model.HLC{Wall: 100, Counter: 0},
+			}},
+			MaxSeq: 1,
+		})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	res, err := SyncFolder(ctx, Config{
+		Client:    client.New(srv.URL, "tok"),
+		Index:     idx,
+		Clock:     hlc.New(),
+		FolderID:  "fld_1",
+		LocalRoot: root,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Applied != 0 {
+		t.Fatalf("applied=%d want 0", res.Applied)
+	}
+	if _, err := os.Stat(file); err != nil {
+		t.Fatalf("file must remain when delete loses LWW: %v", err)
 	}
 }
 

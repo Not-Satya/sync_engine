@@ -26,11 +26,12 @@ const (
 
 // Config drives a metadata sync session for one or more folders.
 type Config struct {
-	Client   *client.Client
-	Index    *index.Store
-	Clock    *hlc.Clock
-	FolderID string // required for SyncFolder; ignored by Run which takes a list
-	Logger   *log.Logger
+	Client    *client.Client
+	Index     *index.Store
+	Clock     *hlc.Clock
+	FolderID  string // required for SyncFolder; ignored by Run which takes a list
+	LocalRoot string // bound folder path; when set, applied deletes unlink on disk (ADR 28)
+	Logger    *log.Logger
 }
 
 // Result summarizes one SyncFolder pass.
@@ -181,7 +182,7 @@ func pullApply(ctx context.Context, cfg Config) (pulled, applied int, cursor int
 		var maxSeq int64 = cursor
 		for _, ev := range page.Events {
 			cfg.Clock.Observe(ev.HLC.Wall, ev.HLC.Counter)
-			n, err := applyEvent(ctx, cfg.Index, ev)
+			n, err := applyEvent(ctx, cfg, ev)
 			if err != nil {
 				return pulled, applied, cursor, fmt.Errorf("apply seq=%d: %w", ev.Seq, err)
 			}
@@ -202,7 +203,8 @@ func pullApply(ctx context.Context, cfg Config) (pulled, applied int, cursor int
 	}
 }
 
-func applyEvent(ctx context.Context, idx *index.Store, ev model.FolderEvent) (int, error) {
+func applyEvent(ctx context.Context, cfg Config, ev model.FolderEvent) (int, error) {
+	idx := cfg.Index
 	applied := 0
 	switch ev.Op {
 	case model.MetaOpUpsert:
@@ -220,6 +222,7 @@ func applyEvent(ctx context.Context, idx *index.Store, ev model.FolderEvent) (in
 		}
 		if ok {
 			applied++
+			unlinkApplied(cfg, ev.Path)
 		}
 	case model.MetaOpRename:
 		if ev.OldPath != "" {
@@ -233,6 +236,7 @@ func applyEvent(ctx context.Context, idx *index.Store, ev model.FolderEvent) (in
 			}
 			if ok {
 				applied++
+				unlinkApplied(cfg, ev.OldPath)
 			}
 		}
 		ok, err := idx.ApplyRemote(ctx, entryFromEvent(ev, false))
@@ -246,6 +250,21 @@ func applyEvent(ctx context.Context, idx *index.Store, ev model.FolderEvent) (in
 		return 0, fmt.Errorf("unknown op %q", ev.Op)
 	}
 	return applied, nil
+}
+
+// unlinkApplied removes local bytes after a winning remote tombstone (ADR 28).
+// Disk errors are logged; the index remains the source of truth.
+func unlinkApplied(cfg Config, relPath string) {
+	if cfg.LocalRoot == "" {
+		return
+	}
+	if err := UnlinkUnderRoot(cfg.LocalRoot, relPath); err != nil {
+		logger := cfg.Logger
+		if logger == nil {
+			logger = log.Default()
+		}
+		logger.Printf("unlink %s under %s: %v", relPath, cfg.LocalRoot, err)
+	}
 }
 
 func entryFromEvent(ev model.FolderEvent, deleted bool) index.Entry {

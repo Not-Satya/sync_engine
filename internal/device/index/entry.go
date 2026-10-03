@@ -24,6 +24,7 @@ type Entry struct {
 	HLCWall     int64
 	HLCCounter  int64
 	Deleted     bool
+	OmitLocal   bool   // device-local only: keep metadata, skip storing blob (ADR 29)
 	DeviceID    string // last writer device (for LWW tie-break)
 	UpdatedAt   time.Time
 }

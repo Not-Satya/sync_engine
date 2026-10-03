@@ -13,7 +13,7 @@
 | **3** | Done | Device folder bindings: local path ↔ FolderID; subscribe from agent; **no fsnotify yet** |
 | **4** | Done | Metadata sync loop (watch + sync names/hashes/versions via coordinator) |
 | **5** | Done | Peer-to-peer file byte transfer |
-| **6** | Planned | Delete (all devices) vs remove-local-copy (this device) |
+| **6** | In progress | Delete (all devices) vs remove-local-copy (this device) |
 | **7** | Post-MVP | Selective sync / placeholders |
 
 ## Phase 2 subphases (done)
@@ -67,5 +67,20 @@
 | P5.5 | Wire into `deviceagent run` + status shows transfer activity | Done |
 
 **Explicitly out of Phase 5 v1:** NAT hole-punching / TURN byte relays, CDC/Rabin chunking, go-bsdiff as the primary path, server-side blob storage.
+
+## Phase 6 subphases
+
+**Goal:** Sync delete removes the file everywhere (tombstone + unlink). Remove-local-copy frees disk on **this** device only (`omit_local`) without lying to the coordinator. Ordinary filesystem delete = sync delete.
+
+| ID | Slice | Status |
+|---|---|---|
+| P6.0 | ADRs (semantics, disk apply, omit flag, CLI) | Done |
+| P6.1 | Apply remote tombstones: unlink local files on disk | Done |
+| P6.2 | Index `omit_local` + remove-local-copy API | Done |
+| P6.3 | Scanner + fetch planner respect omit | Pending |
+| P6.4 | CLI `files remove-local` / `materialize` + status `omitted=N` | Pending |
+| P6.5 | Wire into run loop + tests; Phase 6 complete | Pending |
+
+**Explicitly out of Phase 6 v1:** trash/recycle bin retention, confirm prompts, whole-folder “evict all blobs,” selective-sync placeholders (Phase 7).
 
 Decisions live in `docs/adr/` and are tagged with `Phase` / `Subphase` in each file.

@@ -347,13 +347,19 @@ func (rt *runtime) pollSync(ctx context.Context, interval time.Duration) {
 }
 
 func (rt *runtime) syncOne(ctx context.Context, folderID string) {
-	res, err := syncer.SyncFolder(ctx, syncer.Config{
+	cfg := syncer.Config{
 		Client:   rt.cfg.Client,
 		Index:    rt.cfg.Index,
 		Clock:    rt.clock,
 		FolderID: folderID,
 		Logger:   rt.logger,
-	})
+	}
+	if b, ok := rt.bindingFor(folderID); ok {
+		if h, _ := bindings.CheckPath(b.LocalPath); h == bindings.PathOK {
+			cfg.LocalRoot = b.LocalPath
+		}
+	}
+	res, err := syncer.SyncFolder(ctx, cfg)
 	if err != nil {
 		if ctx.Err() != nil {
 			return

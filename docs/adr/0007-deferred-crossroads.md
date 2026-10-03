@@ -25,7 +25,13 @@ Decision
 - Transport → direct TCP; no TURN in MVP (ADR 23)
 - Resume → retry whole file after temp+verify failure (ADR 24)
 
+**Phase 6 locked:**
+- FS delete → sync delete / tombstone (ADR 27); remove-local-copy is explicit
+- Remote tombstone → unlink under binding root (ADR 28)
+- Device-local `omit_local` on live index rows (ADR 29); not on the oplog
+- CLI → `files remove-local` / `materialize` (ADR 30)
+
 Reason
 ------
 This ADR remains the index for originally deferred crossroads so readers
-do not hunt across files. Detail lives in ADR 16–25.
+do not hunt across files. Detail lives in ADR 16–30.
